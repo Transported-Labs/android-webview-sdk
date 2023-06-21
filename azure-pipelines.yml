@@ -10,4 +10,5 @@ steps:
     ls -lFht ./build/**
     ls -lFht ./lib/build/**
     ls -lFht ./build/kotlin/**
+    ls -lFht ./lib/build/outputs/**
   displayName: Build aar
