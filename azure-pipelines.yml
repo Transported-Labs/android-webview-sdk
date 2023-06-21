@@ -9,7 +9,7 @@ trigger:
     - pipeline_dubug
 
 variables:
-  vmImageName: 'ubuntu-latest'
+  vmImageUbu: 'ubuntu-latest'
   tplProjectName: 'android-webview-sdk'
   # ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
   #   webAppName: prod-dxp
@@ -105,7 +105,7 @@ stages:
   - stage: build
     displayName: Build stage
     pool:
-      vmImage: $(vmImageName)
+      vmImage: $(vmImageUbu)
     jobs:
       - job: BuildAndPublishAndroidWebviewSdk
         steps:
@@ -156,7 +156,7 @@ stages:
         environment: ${{parameters.cdnAccountName}}
 
         pool:
-          vmImage: $(vmImageName)
+          vmImage: $(vmImageUbu)
         strategy:
           runOnce:
             deploy:
