@@ -12,5 +12,5 @@ pool:
 steps:
 - script: |
     ./gradlew assemble
-    ls -lFht wrapper/dists
+    ls -lFht ./**
   displayName: Build aar
