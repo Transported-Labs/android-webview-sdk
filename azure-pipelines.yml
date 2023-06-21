@@ -10,14 +10,21 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
-- task: Gradle@3
-  inputs:
-    # workingDirectory: ''
-    gradleWrapperFile: 'gradlew'
-    gradleOptions: '-Xmx3072m'
-    javaHomeOption: 'JDKVersion'
-    jdkVersionOption: '1.8'
-    jdkArchitectureOption: 'x64'
-    publishJUnitResults: false
-    # testResultsFiles: '**/TEST-*.xml'
-    tasks: 'assemble'
+# - task: Gradle@3
+#   inputs:
+#     # workingDirectory: ''
+#     gradleWrapperFile: 'gradlew'
+#     gradleOptions: '-Xmx3072m'
+#     javaHomeOption: 'JDKVersion'
+#     jdkVersionOption: '1.8'
+#     jdkArchitectureOption: 'x64'
+#     publishJUnitResults: false
+#     # testResultsFiles: '**/TEST-*.xml'
+#     tasks: 'assemble'
+- script: |
+    wget https://services.gradle.org/distributions/gradle-7.5-bin.zip
+    unzip -d . gradle-7.5-bin.zip
+  displayName: Download Gradle 7.5
+- script: |
+    ./../../gradle-7.5/bin/gradlew assemble
+  displayName: Build Bundle
