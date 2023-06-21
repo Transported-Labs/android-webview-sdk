@@ -17,7 +17,7 @@ variables:
   #   cdnGroup: prod-dxp-grp
   #   cdnEndpoint: prod-dxp
   #   domainDXP: tldxp.com
-  #   deleteOlderCDN: 32
+  #   saveLast: 10
   #   uriPath: 'webview-sdk/android''
   #   performPurgeCDN: true
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
@@ -26,7 +26,7 @@ variables:
     cdnGroup: dev-dxp-grp
     cdnEndpoint: dev-dxp
     domainDXP: developdxp.com
-    deleteOlderCDN: 32
+    saveLast: 10
     uriPath: 'webview-sdk/android'
     performPurgeAFD: true
   ${{ elseif eq(variables['Build.SourceBranchName'], 'pipeline_dubug') }}:
@@ -35,7 +35,7 @@ variables:
     cdnGroup: dev-dxp-grp
     cdnEndpoint: dev-dxp
     domainDXP: developdxp.com
-    deleteOlderCDN: 32
+    saveLast: 10
     uriPath: 'webview-sdk/android'
     performPurgeAFD: true
   # ${{ elseif eq(variables['Build.SourceBranchName'], 'testing') }}:
@@ -44,7 +44,7 @@ variables:
   #   cdnGroup: test-dxp-grp
   #   cdnEndpoint: test-dxp
   #   domainDXP: testingdxp.com
-  #   deleteOlderCDN: 32
+  #   saveLast: 10
   #   uriPath: 'webview-sdk/android'
   #   # temporary var performPurgeAFD
   #   performPurgeAFD: true
@@ -54,7 +54,7 @@ variables:
   #   cdnGroup: stag-dxp-grp
   #   cdnEndpoint: stag-dxp
   #   domainDXP: stagingdxp.com
-  #   deleteOlderCDN: 32
+  #   saveLast: 10
   #   uriPath: 'webview-sdk/android'
   #   performPurgeCDN: true
   ${{ elseif eq(variables['Build.Reason'], 'PullRequest') }}:
@@ -62,7 +62,7 @@ variables:
     cdnGroup: for_pr
     cdnEndpoint: for_pr
     domainDXP: for_pr
-    deleteOlderCDN: 32
+    saveLast: 10
     uriPath: 'webview-sdk/android'
 
 parameters:
@@ -118,9 +118,17 @@ stages:
             displayName: Build aar
 
           - script: |
+              echo === MKDIR ===
               mkdir $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/{release,debug}
+              echo === MOVE lib-release.aar TO release/latest.aar  ===
               mv $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/lib-release.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/release/latest.aar
+              echo === COPY release/latest.aar TO release/b$(Build.BuildId).aar ===
+              cp $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/release/latest.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/release/b$(Build.BuildId).aar
+              echo === MOVE lib-debug.aar TO debug/latest.aar  ===
               mv $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/lib-debug.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/debug/latest.aar
+              echo === COPY debug/latest.aar TO debug/b$(Build.BuildId).aar ===
+              cp $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/debug/latest.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/debug/b$(Build.BuildId).aar
+              echo === SHOW aar FILES === 
               ls -lFht $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/**
             displayName: move to latest.aar
 
@@ -164,7 +172,7 @@ stages:
                   displayName: Show Parameters Value
 
                 - task: ExtractFiles@1
-                  displayName: 'Extract mobile ${{ parameters.cdnAccountName }}'
+                  displayName: 'Extract ${{ variables.tplProjectName }} ${{ parameters.cdnAccountName }}'
                   inputs:
                     destinationFolder: ./${{ variables.tplProjectName }}
                     archiveFilePatterns: $(Pipeline.Workspace)/drop/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
@@ -179,3 +187,196 @@ stages:
                     scriptLocation: 'inlineScript'
                     inlineScript: 'az storage blob upload-batch -d "\$web/${{ parameters.uriPath }}" -s ./${{ variables.tplProjectName }} --account-name ${{parameters.cdnAccountName}} --overwrite=true'
                     useGlobalConfig: true
+
+  - stage: PurgeCDN
+    displayName: PurgeCDN stage
+    dependsOn: Deploy
+    condition: and(succeededOrFailed(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - deployment: PurgeCDN
+        displayName: PurgeCDN stage
+        environment: ${{parameters.cdnAccountName}}
+
+        pool:
+          vmImage: $(vmImageUbu)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+
+                - task: AzureCLI@2
+                  displayName: Purge CDN ${{variables.cdnAccountName}}
+                  condition: and(succeededOrFailed(), eq(variables['performPurgeCDN'], 'true'))
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: 'az cdn endpoint purge --debug -g ${{variables.cdnGroup}} -n ${{variables.cdnEndpoint}} --profile-name ${{variables.cdnEndpoint}} --content-paths "/*"'
+                    useGlobalConfig: true
+
+                - task: PythonScript@0
+                  displayName: Get list subdomains in https://${{parameters.webAppName}}.azurewebsites.net/api/subdomains
+                  inputs:
+                    scriptSource: 'inline'
+                    script: |
+                      from time import sleep
+                      import requests
+                      import os
+                      import json
+                      def batch(iterable, n=1):
+                          l = len(iterable)
+                          for ndx in range(0, l, n):
+                              yield iterable[ndx:min(ndx + n, l)]
+                      def response():
+                          headers = {'Authorization': '$(apiSubdomains)', 'Content-Type': 'application/json'}
+                          url = 'https://${{parameters.webAppName}}.azurewebsites.net/api/subdomains'
+                          response = requests.get(url, headers=headers) #, params=params)
+                          count_check_status_code = 0
+                          while response.ok != True:
+                              if count_check_status_code < 5:
+                                  count_check_status_code += 1
+                              else:
+                                  break
+                              sleep(30)
+                              response = requests.get(url, headers=headers)
+                          existBatch = []
+                          if response.ok != True:
+                              print('Failed to get a list of subdomains.')
+                              print(f'##vso[task.setvariable variable=existBatch]selectedSubdomains')
+                              print(f'##vso[task.setvariable variable=selectedSubdomains]garrett.${{parameters.domainDXP}} dev-nick.${{parameters.domainDXP}} thelabs.${{parameters.domainDXP}}')
+                              print(f'##vso[task.setvariable variable=errorExist]Yes')
+                          else:
+                              for x in batch([ x for x in json.loads(response.text) if not "_" in x ], 99):
+                                  y = set(x)
+                                  existBatch.append(f'LIST_SUBDOMAINS99_{list(y)[0].replace("-", "_").upper()}')
+                                  print(f'##vso[task.setvariable variable=LIST_SUBDOMAINS99_{list(y)[0].replace("-","_").upper()}"]{".${{parameters.domainDXP}} ".join(list(y)) + ".${{parameters.domainDXP}}"}')
+                              print('Success to get a list of subdomains.')
+                              print(f'##vso[task.setvariable variable=existBatch]{" ".join(existBatch)}')
+                          print(f'##vso[task.setvariable variable=onlyTestSelectedSubdomains]garrett.${{parameters.domainDXP}} dev-nick.${{parameters.domainDXP}} thelabs.${{parameters.domainDXP}}')
+                      response()
+
+                - bash: |
+                    echo $(existBatch)
+                    echo $(onlyTestSelectedSubdomains)
+                  displayName: Show Value existBatch
+
+                - task: AzureCLI@2
+                  displayName: 'Purge AFD ${{ parameters.cdnAccountName }}'
+                  condition: and(succeededOrFailed(), or(eq(variables['performPurgeAFD'], 'true'), eq('${{ parameters.customPerformPurgeAFD }}', 'true')))
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      set -e
+                      for i in $(existBatch)
+                      do
+                        echo ==== $i
+                        env|grep $i\"=
+                        echo ======= Run az purge
+                        b=`env|grep $i\"=|sed "s/$i\"\=//"`
+                        az afd endpoint purge --debug --resource-group ${{parameters.cdnGroup}} --profile-name ${{parameters.cdnEndpoint}}-standard --endpoint-name ${{parameters.cdnEndpoint}}  --content-paths '/*' --domains `echo $b`
+                        sleep 5
+                        echo ===
+                      done
+                    useGlobalConfig: true
+
+                # - task: AzureCLI@2
+                #   displayName: Leave the last ${{variables.saveLast}} files for CDN ${{variables.cdnAccountName}} in games/ar-fanatics-filters/builds
+                #   inputs:
+                #     azureSubscription: $(AZURE_SUBSCRIPTION)
+                #     scriptType: 'bash'
+                #     scriptLocation: 'inlineScript'
+                #     inlineScript: |
+                #       echo "------------------------------"
+                #       echo ""The Last ${{variables.saveLast}} Files" - games/ar-fanatics-filters/builds/build"
+                #       echo "------------------------------"
+                #       az storage blob list --only-show-errors -c \$web --account-name ${{variables.cdnAccountName}} --prefix "games/ar-fanatics-filters/builds/build" --query \
+                #       "sort_by([].{name:name, Date:properties.lastModified}, &Date)" -otsv
+                #       echo "------------------------------"
+                #       echo "Files will be deleted in the ${{variables.saveLast}}"
+                #       echo "------------------------------"
+                #       az storage blob list --only-show-errors -c \$web --account-name ${{variables.cdnAccountName}} --prefix "games/ar-fanatics-filters/builds/build" --query \
+                #       "sort_by([].{name:name, Date:properties.lastModified}, &Date)" -otsv|awk '{print $1}'|head -n -${{variables.saveLast}}
+                #       echo "------------------------------"
+                #       echo "Deleting"
+                #       echo "------------------------------"
+                #       az storage blob list --only-show-errors -c \$web --account-name ${{variables.cdnAccountName}} --prefix "games/ar-fanatics-filters/builds/build" --query \
+                #       "sort_by([].{name:name, Date:properties.lastModified}, &Date)" -otsv|awk '{print $1}'|head -n -${{variables.saveLast}} \
+                #       | xargs -rtL1 -I {} \
+                #       az storage blob delete-batch --only-show-errors --source \$web --account-name ${{variables.cdnAccountName}} --pattern {}
+                #     useGlobalConfig: true
+
+                - bash: |
+                    echo $(errorExist)
+                  displayName: Show Value errorExist
+
+                - task: PythonScript@0
+                  displayName: Send about files differ from the build
+                  condition: and(succeededOrFailed(), eq(variables['errorExist'], 'Yes'))
+                  inputs:
+                    scriptSource: 'inline'
+                    script: |
+                      import os
+                      import json
+                      import requests
+
+                      SEND_MAIL_TO = os.environ['SEND_MAIL_TO']
+                      SYSTEM_STAGEID=os.environ['SYSTEM_STAGEID']
+                      BUILD_BUILDID=os.environ['BUILD_BUILDID']
+                      devOpsOrg = "$(devOpsOrg)"
+                      devOpsProj = "$(devOpsProj)"
+                      url = f'$(devOpsUrl)'
+                      params = {'api-version': '6.0-preview.1'}
+                      headers = {'Content-Type': 'application/json'}
+                      response = requests.get(
+                          url,
+                          headers=headers,
+                          params=params,
+                          auth=('', '$(armDevOpsPipeline)')
+                      )
+                      textTeams = json.loads(response.text)
+                      devOpsTeamsId = list(map(lambda id: id['id'], textTeams['value']))
+                      listMembers = []
+                      for idMember in devOpsTeamsId:
+                          urlMembers = f'$(devOpsUrl)/{idMember}/members'
+                          params = {'api-version': '6.0-preview.1'}
+                          headers = {'Content-Type': 'application/json'}
+                          responseMembers = requests.get(
+                              urlMembers,
+                              headers=headers,
+                              params=params,
+                              auth=('', '$(armDevOpsPipeline)')
+                          )
+                          textMembers = json.loads(responseMembers.text)
+                          listMembers.append(textMembers['value'])
+                      recipientsIds = []
+                      for members in listMembers:
+                          for memberId in members:
+                              if memberId['uniqueName'] in SEND_MAIL_TO.split(','):
+                                  recipientsIds.append(memberId['id'])
+                      for recipientId in set(recipientsIds):
+                          data_body = \
+                              {
+                                  "senderType": 1,
+                                  "to": {
+                                      "tfsIds": [
+                                          f"{recipientId}"
+                                      ],
+                                      "emailAddresses": []
+                                  },
+                                  "subject": "There are problems in the Pipeline, see the link in the email",
+                                  "body": f"$(seeBuildTask)"
+                              }
+                          url = f'$(devOpsUrlSendMail)'
+                          params = {'api-version': '7.1-preview.1'}
+                          headers = {'Content-Type': 'application/json'}
+                          data = data_body
+                          response = requests.post(
+                              url,
+                              data=json.dumps(data),
+                              headers=headers,
+                              params=params,
+                              auth=('', '$(armDevOpsPipeline)')
+                          )
+                          print(response.text if response.text != '' else f'sended recipients {SEND_MAIL_TO}')
