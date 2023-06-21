@@ -6,9 +6,9 @@ pool:
 
 steps:
 - script: |
+    rm gradlew
+    gradle wrapper
+    ls -lFht
     ./gradlew assemble
-    ls -lFht ./build/**
-    ls -lFht ./lib/build/**
-    ls -lFht ./build/kotlin/**
     ls -lFht ./lib/build/outputs/**
   displayName: Build aar
