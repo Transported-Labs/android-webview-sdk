@@ -29,6 +29,6 @@ steps:
     ls -lFht ./gradle-7.5/bin/gradle
     ./gradle-7.5/bin/gradle  wrapper
     ls -lFht ./gradle-7.5/bin/
-    gradlew assemble
+    ./gradlew assemble
     # ./../../gradle-7.5/bin/gradle
   displayName: Build Bundle
