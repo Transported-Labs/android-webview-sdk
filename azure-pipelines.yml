@@ -1,14 +1,181 @@
 trigger:
-- pipeline_dubug
+  batch: true
+  branches:
+    include:
+    - main
+    - develop
+    - testing
+    - staging
+    - pipeline_dubug
 
-pool:
-  vmImage: ubuntu-latest
+variables:
+  vmImageName: 'ubuntu-latest'
+  tplProjectName: 'android-webview-sdk'
+  # ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+  #   webAppName: prod-dxp
+  #   cdnAccountName: proddxpcdn
+  #   cdnGroup: prod-dxp-grp
+  #   cdnEndpoint: prod-dxp
+  #   domainDXP: tldxp.com
+  #   deleteOlderCDN: 32
+  #   uriPath: 'webview-sdk/android''
+  #   performPurgeCDN: true
+  ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+    webAppName: dev-dxp
+    cdnAccountName: devdxpcdn
+    cdnGroup: dev-dxp-grp
+    cdnEndpoint: dev-dxp
+    domainDXP: developdxp.com
+    deleteOlderCDN: 32
+    uriPath: 'webview-sdk/android'
+    performPurgeAFD: true
+  ${{ elseif eq(variables['Build.SourceBranchName'], 'pipeline_dubug') }}:
+    webAppName: dev-dxp
+    cdnAccountName: devdxpcdn
+    cdnGroup: dev-dxp-grp
+    cdnEndpoint: dev-dxp
+    domainDXP: developdxp.com
+    deleteOlderCDN: 32
+    uriPath: 'webview-sdk/android'
+    performPurgeAFD: true
+  # ${{ elseif eq(variables['Build.SourceBranchName'], 'testing') }}:
+  #   webAppName: test-dxp
+  #   cdnAccountName: testdxpcdn
+  #   cdnGroup: test-dxp-grp
+  #   cdnEndpoint: test-dxp
+  #   domainDXP: testingdxp.com
+  #   deleteOlderCDN: 32
+  #   uriPath: 'webview-sdk/android'
+  #   # temporary var performPurgeAFD
+  #   performPurgeAFD: true
+  # ${{ elseif eq(variables['Build.SourceBranchName'], 'staging') }}:
+  #   webAppName: stag-dxp
+  #   cdnAccountName: stagdxpcdn
+  #   cdnGroup: stag-dxp-grp
+  #   cdnEndpoint: stag-dxp
+  #   domainDXP: stagingdxp.com
+  #   deleteOlderCDN: 32
+  #   uriPath: 'webview-sdk/android'
+  #   performPurgeCDN: true
+  ${{ elseif eq(variables['Build.Reason'], 'PullRequest') }}:
+    cdnAccountName: for_pr
+    cdnGroup: for_pr
+    cdnEndpoint: for_pr
+    domainDXP: for_pr
+    deleteOlderCDN: 32
+    uriPath: 'webview-sdk/android'
 
-steps:
-- script: |
-    rm gradlew
-    gradle wrapper
-    ls -lFht
-    ./gradlew assemble
-    ls -lFht ./lib/build/outputs/**
-  displayName: Build aar
+parameters:
+- name: cdnAccountName
+  displayName: cdnAccountName
+  type: string
+  default: $(cdnAccountName)
+- name: cdnGroup
+  displayName: cdnGroup
+  type: string
+  default: $(cdnGroup)
+- name: cdnEndpoint
+  displayName: cdnEndpoint
+  type: string
+  default: $(cdnEndpoint)
+- name: domainDXP
+  displayName: domainDXP
+  type: string
+  default: $(domainDXP)
+- name: deleteOlderCDN
+  displayName: deleteOlderCDN
+  type: string
+  default: $(deleteOlderCDN)
+- name: uriPath
+  displayName: uriPath
+  type: string
+  default: $(uriPath)
+- name: X_API
+  displayName: X_API
+  type: string
+  default: undefined
+- name: webAppName
+  type: string
+  default: $(webAppName)
+- name: customPerformPurgeAFD
+  type: boolean
+  default: false
+
+stages:
+  - stage: build
+    displayName: Build stage
+    pool:
+      vmImage: $(vmImageName)
+    jobs:
+      - job: BuildAndPublishAndroidWebviewSdk
+        steps:
+          - script: |
+              rm gradlew
+              gradle wrapper
+              ls -lFht
+              ./gradlew assemble
+              ls -lFht ./lib/build/outputs/**
+            displayName: Build aar
+
+          - script: |
+              mkdir $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/{release,debug}
+              mv $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/lib-release.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/release/latest.aar
+              mv $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/lib-debug.aar $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/debug/latest.aar
+              ls -lFht $(System.DefaultWorkingDirectory)/lib/build/outputs/aar/**
+            displayName: move to latest.aar
+
+          - task: ArchiveFiles@2
+            displayName: 'Archive aar'
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+            inputs:
+              rootFolderOrFile: $(System.DefaultWorkingDirectory)/lib/build/outputs/aar
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
+              replaceExistingArchive: true
+
+          - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
+            artifact: drop
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+  - stage: Deploy
+    displayName: Deploy stage
+    dependsOn: Build
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy stage
+        environment: ${{parameters.cdnAccountName}}
+
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+
+                - bash: |
+                    echo ${{ parameters.cdnAccountName }}
+                    echo ${{ parameters.cdnGroup }}
+                    echo ${{ parameters.cdnEndpoint }}
+                    echo ${{ parameters.domainDXP }}
+                    echo ${{ parameters.deleteOlderCDN }}
+                    echo ${{ parameters.uriPath }}
+                  displayName: Show Parameters Value
+
+                - task: ExtractFiles@1
+                  displayName: 'Extract mobile ${{ parameters.cdnAccountName }}'
+                  inputs:
+                    destinationFolder: ./${{ variables.tplProjectName }}
+                    archiveFilePatterns: $(Pipeline.Workspace)/drop/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
+                    cleanDestinationFolder: true
+                    overwriteExistingFiles: false
+
+                - task: AzureCLI@2
+                  displayName: Deploy ${{ variables.tplProjectName }} ${{parameters.cdnAccountName}}
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: 'az storage blob upload-batch -d "\$web/${{ parameters.uriPath }}" -s ./${{ variables.tplProjectName }} --account-name ${{parameters.cdnAccountName}} --overwrite=true'
+                    useGlobalConfig: true
