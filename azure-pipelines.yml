@@ -3,10 +3,9 @@ trigger:
   branches:
     include:
     - main
-    - develop
-    - testing
-    - staging
-    - pipeline_dubug
+    # - develop
+    # - testing
+    # - staging
 
 variables:
   vmImageUbu: 'ubuntu-latest'
@@ -29,7 +28,7 @@ variables:
     saveLast: 10
     uriPath: 'webview-sdk/android'
     performPurgeAFD: true
-  ${{ elseif eq(variables['Build.SourceBranchName'], 'pipeline_dubug') }}:
+  ${{ elseif eq(variables['Build.SourceBranchName'], 'develop') }}:
     webAppName: dev-dxp
     cdnAccountName: devdxpcdn
     cdnGroup: dev-dxp-grp
