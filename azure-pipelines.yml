@@ -26,5 +26,8 @@ steps:
     unzip -d . gradle-7.5-bin.zip
   displayName: Download Gradle 7.5
 - script: |
-    ./../../gradle-7.5/bin/gradlew assemble
+    ls -lFht ./gradle-7.5/bin/gradle
+    ./gradle-7.5/bin/gradle  wrapper
+    gradlew assemble
+    # ./../../gradle-7.5/bin/gradle
   displayName: Build Bundle
