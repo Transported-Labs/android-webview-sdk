@@ -4,6 +4,9 @@ import android.content.Context
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraManager.TorchCallback
+import android.os.Build
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONArray
@@ -13,9 +16,11 @@ import org.json.JSONException
 class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     private val torchServiceName = "torch"
+    private val vibrationServiceName = "vibration"
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val checkIsOnMethodName = "isOn"
+    private val vibrateMethodName = "vibrate"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -52,6 +57,22 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             errorToJavaScript("Camera access denied")
         }
     }
+    @Suppress("DEPRECATION")
+    private fun makeVibration(duration: Int?) {
+        if (duration != null) {
+            val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager =
+                    mContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vibratorManager.defaultVibrator
+            } else {
+                mContext.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            vibrator.vibrate(duration.toLong())
+            sendToJavaScript(null)
+        } else {
+            errorToJavaScript("Duration: $duration is not valid value")
+        }
+    }
 
     private fun checkIsTorchOn() {
         sendToJavaScript(isFlashlightOn)
@@ -81,12 +102,19 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             checkIsOnMethodName -> checkIsTorchOn()
                             testErrorMethodName -> errorToJavaScript("This is the test error message")
                         }
+                    } else if (serviceName == vibrationServiceName) {
+                        when (methodName) {
+                            vibrateMethodName ->  {
+                                val duration = params[3] as? Int
+                                makeVibration(duration)
+                            }
+                        }
                     } else {
-                        errorToJavaScript("Only serviceName '$torchServiceName' is supported")
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName' are supported")
                     }
                 }
             } else {
-                errorToJavaScript("No correct serviceName or/and methodName were passsed")
+                errorToJavaScript("No correct serviceName or/and methodName were passed")
             }
         }
     }
@@ -97,14 +125,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun sendToJavaScript(result: Any?, errorMessage: String = "") {
-        webView.post(Runnable {
+        webView.post({
             doSendToJavaScript(result, errorMessage)
         })
     }
 
     private fun doSendToJavaScript(result: Any?, errorMessage: String = "") {
         if (curRequestId != null) {
-            var params = JSONArray()
+            val params = JSONArray()
             params.put(curRequestId)
             if (result != null) {
                 params.put(result)
