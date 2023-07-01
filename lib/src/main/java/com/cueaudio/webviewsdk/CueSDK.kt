@@ -125,9 +125,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun sendToJavaScript(result: Any?, errorMessage: String = "") {
-        webView.post({
+        webView.post {
             doSendToJavaScript(result, errorMessage)
-        })
+        }
     }
 
     private fun doSendToJavaScript(result: Any?, errorMessage: String = "") {
