@@ -4,9 +4,7 @@ import android.content.Context
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraManager.TorchCallback
-import android.os.Build
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.os.*
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONArray
@@ -21,6 +19,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val offMethodName = "off"
     private val checkIsOnMethodName = "isOn"
     private val vibrateMethodName = "vibrate"
+    private val sparkleMethodName = "sparkle"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -48,15 +47,46 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     // Using methods of camera2 API to turn torch on/off when front camera is active
-    private fun turnTorch(isOn: Boolean) {
+    private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
         val cameraId = cameraManager.cameraIdList[0]
         try {
             cameraManager.setTorchMode(cameraId, isOn)
-            sendToJavaScript(null)
+            if (isJavaScriptCallbackNeeded) {
+                sendToJavaScript(null)
+            }
         } catch (e: CameraAccessException) {
             errorToJavaScript("Camera access denied")
         }
     }
+
+    private fun sparkle(duration: Int?) {
+        if (duration != null) {
+            val flashThread = Thread {
+                var isOn = false
+                var isSparkling = true
+                val blinkDelay: Long = 50
+                while (isSparkling) {
+                    isOn = !isOn
+                    turnTorch(isOn, false)
+                    try {
+                        Thread.sleep(blinkDelay)
+                    } catch (e: InterruptedException) {
+                        turnTorch(false, false)
+                        isSparkling = false
+                    }
+                }
+            }
+
+            flashThread.start()
+            Handler(Looper.getMainLooper()).postDelayed({
+                flashThread.interrupt()
+                sendToJavaScript(null)
+            }, duration.toLong())
+        } else {
+            errorToJavaScript("Duration: $duration is not valid value")
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun makeVibration(duration: Int?) {
         if (duration != null) {
@@ -100,6 +130,10 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             onMethodName -> turnTorch(true)
                             offMethodName -> turnTorch(false)
                             checkIsOnMethodName -> checkIsTorchOn()
+                            sparkleMethodName -> {
+                                val duration = params[3] as? Int
+                                sparkle(duration)
+                            }
                             testErrorMethodName -> errorToJavaScript("This is the test error message")
                         }
                     } else if (serviceName == vibrationServiceName) {
