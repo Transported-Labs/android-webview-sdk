@@ -1,19 +1,16 @@
 package com.cueaudio.webviewsdk
 
-import android.content.Context
-import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Parcelable
 import android.webkit.*
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.isVisible
-import kotlinx.parcelize.Parcelize
-import java.io.Serializable
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
 
 class WebViewActivity : AppCompatActivity() {
 
@@ -29,6 +26,7 @@ class WebViewActivity : AppCompatActivity() {
         webView = findViewById<WebView>(R.id.webView)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.settings.userAgentString = userAgentString
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -59,13 +57,39 @@ class WebViewActivity : AppCompatActivity() {
                 }
             }
         }
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    request.grant(request.resources) }
+            }
+        }
         val cueSDK = CueSDK(this, webView)
         webView.addJavascriptInterface(cueSDK, cueSDKName)
 
         val url = intent.getStringExtra("url")
         if (url != null) {
             webView.loadUrl(url)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        checkMicrophonePermission()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // To stop the audio microphone playback
+        webView.loadUrl("javascript:document.location=document.location")
+    }
+    private fun checkMicrophonePermission() {
+        val requestCode = 1000
+        val permission: Int =
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this, arrayOf<String>(Manifest.permission.RECORD_AUDIO), requestCode
+            )
         }
     }
 
