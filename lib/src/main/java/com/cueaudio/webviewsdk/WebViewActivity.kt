@@ -1,23 +1,21 @@
 package com.cueaudio.webviewsdk
 
-import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.webkit.*
 import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 
 
 class WebViewActivity : AppCompatActivity() {
 
     private val cueSDKName = "cueSDK"
     private lateinit var webView: WebView
+    private lateinit var cueSDK: CueSDK
     private val userAgentString = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -32,20 +30,19 @@ class WebViewActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
             }
-            @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
             override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
                 super.onReceivedHttpError(view, request, errorResponse)
                 if (errorResponse != null) {
                     alertInternetError(errorResponse.reasonPhrase)
                 }
             }
-            @RequiresApi(Build.VERSION_CODES.M)
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 super.onReceivedError(view, request, error)
                 if (error != null) {
                     alertInternetError(error.description.toString())
                 }
             }
+            @Deprecated("Deprecated in Java")
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
@@ -63,7 +60,7 @@ class WebViewActivity : AppCompatActivity() {
                     request.grant(request.resources) }
             }
         }
-        val cueSDK = CueSDK(this, webView)
+        cueSDK = CueSDK(this, webView)
         webView.addJavascriptInterface(cueSDK, cueSDKName)
 
         val url = intent.getStringExtra("url")
@@ -72,24 +69,21 @@ class WebViewActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        checkMicrophonePermission()
-    }
-
     override fun onPause() {
         super.onPause()
-        // To stop the audio microphone playback
+        // To stop the audio / video playback
         webView.loadUrl("javascript:document.location=document.location")
     }
-    private fun checkMicrophonePermission() {
-        val requestCode = 1000
-        val permission: Int =
-            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-        if (permission != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf<String>(Manifest.permission.RECORD_AUDIO), requestCode
-            )
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            PermissionConstant.ASK_CAMERA_REQUEST,
+            PermissionConstant.ASK_MICROPHONE_REQUEST -> {
+                val granted = (grantResults.isNotEmpty()
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                cueSDK.callCurPermissionRequestGranted(granted)
+            }
         }
     }
 

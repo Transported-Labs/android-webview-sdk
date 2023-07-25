@@ -1,25 +1,36 @@
 package com.cueaudio.webviewsdk
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraManager.TorchCallback
 import android.os.*
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONException
 
-
+object PermissionConstant {
+    const val ASK_MICROPHONE_REQUEST = 1001
+    const val ASK_CAMERA_REQUEST = 1002
+}
 class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     private val torchServiceName = "torch"
     private val vibrationServiceName = "vibration"
+    private val permissionsServiceName = "permissions"
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val checkIsOnMethodName = "isOn"
     private val vibrateMethodName = "vibrate"
     private val sparkleMethodName = "sparkle"
+    private val askMicMethodName = "getMicPermission"
+    private val askCamMethodName = "getCameraPermission"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -103,6 +114,34 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             errorToJavaScript("Duration: $duration is not valid value")
         }
     }
+    private fun askForPermission(requestCode: Int) {
+        var permissionType = ""
+        when (requestCode) {
+            PermissionConstant.ASK_CAMERA_REQUEST -> {
+                permissionType = Manifest.permission.CAMERA
+            }
+            PermissionConstant.ASK_MICROPHONE_REQUEST -> {
+                permissionType = Manifest.permission.RECORD_AUDIO
+            }
+        }
+        if (permissionType != "") {
+            val permission: Int =
+                ContextCompat.checkSelfPermission(mContext, permissionType)
+            if (permission != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                    mContext as Activity, arrayOf<String>(permissionType), requestCode
+                )
+            } else {
+                sendToJavaScript(true)
+            }
+        } else {
+            errorToJavaScript("PermissionID can not be empty")
+        }
+    }
+
+    fun callCurPermissionRequestGranted(granted: Boolean) {
+        sendToJavaScript(granted)
+    }
 
     private fun checkIsTorchOn() {
         sendToJavaScript(isFlashlightOn)
@@ -143,8 +182,17 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 makeVibration(duration)
                             }
                         }
+                    } else if (serviceName == permissionsServiceName) {
+                        when (methodName) {
+                            askMicMethodName ->  {
+                                askForPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
+                            }
+                            askCamMethodName ->  {
+                                askForPermission(PermissionConstant.ASK_CAMERA_REQUEST)
+                            }
+                        }
                     } else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName' are supported")
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName' are supported")
                     }
                 }
             } else {
