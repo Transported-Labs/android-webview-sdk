@@ -79,7 +79,8 @@ class WebViewActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             PermissionConstant.ASK_CAMERA_REQUEST,
-            PermissionConstant.ASK_MICROPHONE_REQUEST -> {
+            PermissionConstant.ASK_MICROPHONE_REQUEST,
+            PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 val granted = (grantResults.isNotEmpty()
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED)
                 cueSDK.callCurPermissionRequestGranted(granted)

@@ -18,6 +18,7 @@ import org.json.JSONException
 object PermissionConstant {
     const val ASK_MICROPHONE_REQUEST = 1001
     const val ASK_CAMERA_REQUEST = 1002
+    const val ASK_SAVE_PHOTO_REQUEST = 1003
 }
 class CueSDK (private val mContext: Context, private val webView: WebView) {
 
@@ -31,6 +32,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val sparkleMethodName = "sparkle"
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
+    private val askSavePhotoMethodName = "getSavePhotoPermission"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -123,6 +125,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             PermissionConstant.ASK_MICROPHONE_REQUEST -> {
                 permissionType = Manifest.permission.RECORD_AUDIO
             }
+            PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
+                permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }
         }
         if (permissionType != "") {
             val permission: Int =
@@ -189,6 +194,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             }
                             askCamMethodName ->  {
                                 askForPermission(PermissionConstant.ASK_CAMERA_REQUEST)
+                            }
+                            askSavePhotoMethodName ->  {
+                                askForPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
                             }
                         }
                     } else {
