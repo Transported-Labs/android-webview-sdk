@@ -14,6 +14,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONException
+import java.io.File
+import java.io.FileNotFoundException
+import java.util.*
 
 object PermissionConstant {
     const val ASK_MICROPHONE_REQUEST = 1001
@@ -25,11 +28,13 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val torchServiceName = "torch"
     private val vibrationServiceName = "vibration"
     private val permissionsServiceName = "permissions"
+    private val storageServiceName = "storage"
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val checkIsOnMethodName = "isOn"
     private val vibrateMethodName = "vibrate"
     private val sparkleMethodName = "sparkle"
+    private val saveMediaMethodName = "saveMedia"
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
     private val askSavePhotoMethodName = "getSavePhotoPermission"
@@ -100,6 +105,29 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         }
     }
 
+    private fun saveMedia(data: String?, filename: String?) {
+        if (data != null) {
+            if (filename != null) {
+                try {
+                    val pictureBytes = Base64.getDecoder().decode(data)
+                    val path = File(
+                        Environment.getExternalStoragePublicDirectory(
+                            Environment.DIRECTORY_DCIM
+                        ), filename
+                    )
+                    sendToJavaScript(null)
+                    path.writeBytes(pictureBytes)
+                } catch (e: FileNotFoundException) {
+                    errorToJavaScript(e.localizedMessage)
+                }
+            } else {
+                errorToJavaScript("Filename: $filename is not valid value")
+            }
+        } else {
+            errorToJavaScript("Data: $data is not valid value")
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun makeVibration(duration: Int?) {
         if (duration != null) {
@@ -126,7 +154,13 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 permissionType = Manifest.permission.RECORD_AUDIO
             }
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
-                permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+                    // Not ask for permission for Android 11+
+                    sendToJavaScript(true)
+                    return
+                } else {
+                    permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }
             }
         }
         if (permissionType != "") {
@@ -187,6 +221,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 makeVibration(duration)
                             }
                         }
+                    }  else if (serviceName == storageServiceName) {
+                        when (methodName) {
+                            saveMediaMethodName ->  {
+                                val data = params[3] as? String
+                                val filename = params[4] as? String
+                                saveMedia(data, filename)
+                            }
+                        }
                     } else if (serviceName == permissionsServiceName) {
                         when (methodName) {
                             askMicMethodName ->  {
@@ -200,7 +242,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             }
                         }
                     } else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName' are supported")
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName' are supported")
                     }
                 }
             } else {
