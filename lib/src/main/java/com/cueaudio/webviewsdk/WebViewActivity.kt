@@ -38,9 +38,10 @@ class WebViewActivity : AppCompatActivity() {
             }
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 super.onReceivedError(view, request, error)
-                if (error != null) {
-                    alertInternetError(error.description.toString())
-                }
+                // Disabled to avoid extra toast messages on load
+//                if (error != null) {
+//                    alertInternetError(error.description.toString())
+//                }
             }
             @Deprecated("Deprecated in Java")
             override fun onReceivedError(
