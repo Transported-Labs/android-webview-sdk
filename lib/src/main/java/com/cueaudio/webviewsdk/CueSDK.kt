@@ -14,6 +14,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONException
+import org.json.JSONObject
+import org.mozilla.geckoview.WebExtension
 import java.io.File
 import java.io.FileNotFoundException
 import java.util.*
@@ -23,7 +25,7 @@ object PermissionConstant {
     const val ASK_CAMERA_REQUEST = 1002
     const val ASK_SAVE_PHOTO_REQUEST = 1003
 }
-class CueSDK (private val mContext: Context, private val webView: WebView) {
+class CueSDK (private val mContext: Context, private val webView: WebView?, private val geckoPort: WebExtension.Port? = null) {
 
     private val torchServiceName = "torch"
     private val vibrationServiceName = "vibration"
@@ -257,12 +259,6 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun sendToJavaScript(result: Any?, errorMessage: String = "") {
-        webView.post {
-            doSendToJavaScript(result, errorMessage)
-        }
-    }
-
-    private fun doSendToJavaScript(result: Any?, errorMessage: String = "") {
         if (curRequestId != null) {
             val params = JSONArray()
             params.put(curRequestId)
@@ -273,10 +269,16 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 params.put(errorMessage)
             }
             val paramData = params.toString()
-            val js2 = "cueSDKCallback(JSON.stringify($paramData))"
-            print("Sent to Javascript: $js2")
-            webView.evaluateJavascript(js2) { returnValue ->
+            webView?.post {
+                val js2 = "cueSDKCallback(JSON.stringify($paramData))"
+                print("Sent to Javascript: $js2")
+                webView?.evaluateJavascript(js2) { returnValue ->
                     print(returnValue)
+                }
+            }
+            geckoPort?.apply{
+                val paramsObject = JSONObject(mapOf("text" to paramData))
+                geckoPort?.postMessage(paramsObject)
             }
         } else {
             print("curRequestId is null")
