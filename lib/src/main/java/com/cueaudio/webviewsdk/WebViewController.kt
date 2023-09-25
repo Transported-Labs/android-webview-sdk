@@ -14,18 +14,6 @@ class WebViewController(private val mContext: Context) {
 
     ///Checks validity of passed URL, starts new activity, navigates to the url in embedded WebView-object
     @Throws(InvalidUrlError::class)
-    fun navigateToGecko(url: String) {
-        if (URLUtil.isValidUrl(url)) {
-            val intent = Intent(mContext, GeckoViewActivity::class.java)
-            intent.putExtra("url", url)
-            mContext.startActivity(intent)
-        } else {
-            throw InvalidUrlError("Invalid URL: '$url'")
-        }
-    }
-
-    ///Checks validity of passed URL, starts new activity, navigates to the url in embedded WebView-object
-    @Throws(InvalidUrlError::class)
     fun navigateTo(url: String) {
         if (URLUtil.isValidUrl(url)) {
             val intent = Intent(mContext, WebViewActivity::class.java)
@@ -57,8 +45,7 @@ class WebViewController(private val mContext: Context) {
     @Suppress("DEPRECATION")
     private fun isAppInstalled(packageName: String): Boolean {
         val pm: PackageManager = mContext.packageManager
-        var installed = false
-        installed = try {
+        var installed: Boolean = try {
             pm.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES)
             true
         } catch (e: PackageManager.NameNotFoundException) {
