@@ -10,8 +10,11 @@ import android.hardware.camera2.CameraManager.TorchCallback
 import android.os.*
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.cueaudio.engine.CUEEngine
+import com.cueaudio.engine.CUETrigger
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -23,13 +26,16 @@ object PermissionConstant {
     const val ASK_MICROPHONE_REQUEST = 1001
     const val ASK_CAMERA_REQUEST = 1002
     const val ASK_SAVE_PHOTO_REQUEST = 1003
+    const val ASK_MICROPHONE_TRIGGERS_REQUEST = 1004
 }
 class CueSDK (private val mContext: Context, private val webView: WebView) {
+    private val API_KEY = "TQeAwPHVnLwJrs5HEWvSmphO9D2dDeHc" //EH0GHbslb0pNWAxPf57qA6n23w4Zgu5U
 
     private val torchServiceName = "torch"
     private val vibrationServiceName = "vibration"
     private val permissionsServiceName = "permissions"
     private val storageServiceName = "storage"
+    private val audioTriggersServiceName = "audioTriggers"
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val checkIsOnMethodName = "isOn"
@@ -39,6 +45,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
     private val askSavePhotoMethodName = "getSavePhotoPermission"
+    private val startListeningMethodName = "startListening"
+    private val stopListeningMethodName = "stopListening"
+    private val subscribeMethodName = "subscribe"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -54,6 +63,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     init {
         cameraManager.registerTorchCallback(torchCallback, null)
+        initEngine()
     }
 
     /// Post message from the web page
@@ -151,7 +161,8 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             PermissionConstant.ASK_CAMERA_REQUEST -> {
                 permissionType = Manifest.permission.CAMERA
             }
-            PermissionConstant.ASK_MICROPHONE_REQUEST -> {
+            PermissionConstant.ASK_MICROPHONE_REQUEST,
+            PermissionConstant.ASK_MICROPHONE_TRIGGERS_REQUEST -> {
                 permissionType = Manifest.permission.RECORD_AUDIO
             }
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
@@ -173,6 +184,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 )
             } else {
                 sendToJavaScript(true)
+                if (requestCode == PermissionConstant.ASK_MICROPHONE_TRIGGERS_REQUEST) {
+                    initTriggers()
+                }
             }
         } else {
             errorToJavaScript("PermissionID can not be empty")
@@ -185,6 +199,60 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     private fun checkIsTorchOn() {
         sendToJavaScript(isFlashlightOn)
+    }
+
+    public fun initEngine() {
+        println("Trying to init engine")
+        askForPermission(PermissionConstant.ASK_MICROPHONE_TRIGGERS_REQUEST)
+    }
+    public fun doneTriggers() {
+        println("Trying to stop triggers")
+        stopListeningTriggers()
+    }
+
+    public fun initTriggers() {
+        //assume that permission RECORD_AUDIO was granted
+        CUEEngine.getInstance().setupWithAPIKey(mContext, API_KEY)
+        CUEEngine.getInstance().setDefaultGeneration(2)
+        CUEEngine.getInstance().setReceiverCallback { jsonString ->
+            val model: CUETrigger = CUETrigger.parse(jsonString)
+            (mContext as AppCompatActivity).runOnUiThread {
+                onTriggerHeard(model)
+            }
+        }
+//        enableListening(true)
+        val config: String = CUEEngine.getInstance().config
+        println("initTriggers with config: $config")
+        CUEEngine.getInstance().isTransmittingEnabled = true
+    }
+
+    private fun onTriggerHeard(model: CUETrigger) {
+        webView.post {
+            val modelString = model.rawJson
+            val js = "cueAudioTriggerCallback(JSON.stringify($modelString))"
+            println("Sent to Javascript AudioTrigger: $js")
+            webView.evaluateJavascript(js) { returnValue ->
+                println(returnValue)
+            }
+        }
+    }
+
+    private fun startListeningTriggers() {
+        (mContext as AppCompatActivity).runOnUiThread {
+            if (!CUEEngine.getInstance().isListening) {
+                CUEEngine.getInstance().startListening()
+                println("Triggers are started")
+            }
+        }
+    }
+
+    private fun stopListeningTriggers() {
+        (mContext as AppCompatActivity).runOnUiThread {
+            if (CUEEngine.getInstance().isListening) {
+                CUEEngine.getInstance().stopListening()
+                println("Triggers are stopped")
+            }
+        }
     }
 
     private fun convertToParamsArray(source: String): JSONArray? {
@@ -242,6 +310,21 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 askForPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
                             }
                         }
+                    } else if (serviceName == audioTriggersServiceName) {
+                        when (methodName) {
+                            startListeningMethodName ->  {
+                                startListeningTriggers()
+                                sendToJavaScript(null)
+                            }
+                            stopListeningMethodName ->  {
+                                stopListeningTriggers()
+                                sendToJavaScript(null)
+                            }
+                            subscribeMethodName ->  {
+                                //subscribeTriggers()
+                                sendToJavaScript(null)
+                            }
+                        }
                     } else {
                         errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName' are supported")
                     }
@@ -253,7 +336,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun errorToJavaScript(errorMessage: String) {
-        print(errorMessage)
+        println(errorMessage)
         sendToJavaScript(null, errorMessage)
     }
 
@@ -270,13 +353,13 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             val paramData = params.toString()
             webView.post {
                 val js2 = "cueSDKCallback(JSON.stringify($paramData))"
-                print("Sent to Javascript: $js2")
+                println("Sent to Javascript: $js2")
                 webView.evaluateJavascript(js2) { returnValue ->
-                    print(returnValue)
+                    println(returnValue)
                 }
             }
         } else {
-            print("curRequestId is null")
+            println("curRequestId is null")
         }
     }
 }

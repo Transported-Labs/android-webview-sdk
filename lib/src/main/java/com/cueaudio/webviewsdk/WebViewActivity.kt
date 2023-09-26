@@ -2,6 +2,7 @@ package com.cueaudio.webviewsdk
 
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.webkit.*
 import android.widget.Toast
@@ -27,6 +28,11 @@ class WebViewActivity : AppCompatActivity() {
         webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.settings.userAgentString = userAgentString
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                // Stop listening triggers on page reload
+                cueSDK.doneTriggers()
+            }
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
             }
@@ -75,6 +81,15 @@ class WebViewActivity : AppCompatActivity() {
         // To stop the audio / video playback
         webView.loadUrl("javascript:document.location=document.location")
     }
+    override fun onStart() {
+        super.onStart()
+        cueSDK.initEngine()
+    }
+    override fun onStop() {
+        // Stop listening triggers on activity stop
+        cueSDK.doneTriggers()
+        super.onStop()
+    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -85,6 +100,13 @@ class WebViewActivity : AppCompatActivity() {
                 val granted = (grantResults.isNotEmpty()
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED)
                 cueSDK.callCurPermissionRequestGranted(granted)
+            }
+            PermissionConstant.ASK_MICROPHONE_TRIGGERS_REQUEST -> {
+                val granted = (grantResults.isNotEmpty()
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                if (granted) {
+                    cueSDK.initTriggers()
+                }
             }
         }
     }
