@@ -113,7 +113,7 @@ stages:
               echo com.cueaudio.maven.bucket=$COM_CUEAUDIO_MAVEN_BUCKET >> local.properties
               echo com.cueaudio.maven.username=$COM_CUEAUDIO_MAVEN_USERNAME >> local.properties
               echo com.cueaudio.maven.password=$COM_CUEAUDIO_MAVEN_PASSWORD >> local.properties
-              car local.properties
+              cat local.properties
             displayName: set com.cueaudio.maven.* for aar
             env:
               COM_CUEAUDIO_MAVEN_BUCKET: $(COM_CUEAUDIO_MAVEN_BUCKET)
