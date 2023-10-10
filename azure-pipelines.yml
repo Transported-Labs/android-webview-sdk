@@ -115,6 +115,10 @@ stages:
               ./gradlew assemble
               ls -lFht ./lib/build/outputs/**
             displayName: Build aar
+            env:
+              COM_CUEAUDIO_MAVEN_BUCKET: $(COM_CUEAUDIO_MAVEN_BUCKET)
+              COM_CUEAUDIO_MAVEN_USERNAME: $(COM_CUEAUDIO_MAVEN_USERNAME)
+              COM_CUEAUDIO_MAVEN_PASSWORD: $(COM_CUEAUDIO_MAVEN_PASSWORD)
 
           - script: |
               echo === MKDIR ===
