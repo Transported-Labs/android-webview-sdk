@@ -23,10 +23,6 @@ class WebViewController(private val mContext: Context) {
             throw InvalidUrlError("Invalid URL: '$url'")
         }
     }
-    fun demoEngine() {
-        val intent = Intent(mContext, EngineActivity::class.java)
-        mContext.startActivity(intent)
-    }
 
     ///Checks validity of passed URL, navigates to the url in Chrome Custom Tabs
     @Throws(InvalidUrlError::class)
