@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraManager.TorchCallback
 import android.os.*
@@ -17,6 +18,7 @@ import org.json.JSONException
 import java.io.File
 import java.io.FileNotFoundException
 import java.util.*
+import kotlin.math.roundToInt
 
 object PermissionConstant {
     const val ASK_MICROPHONE_REQUEST = 1001
@@ -34,6 +36,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val checkIsOnMethodName = "isOn"
     private val vibrateMethodName = "vibrate"
     private val sparkleMethodName = "sparkle"
+    private val advancedSparkleMethodName = "advancedSparkle"
     private val saveMediaMethodName = "saveMedia"
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
@@ -64,6 +67,30 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         }
     }
 
+    private fun turnTorchToLevel(level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
+        val cameraId = cameraManager.cameraIdList[0]
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            val supportedMaxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
+            // Check if camera supports Torch Strength Control
+            if (supportedMaxLevel != null && supportedMaxLevel > 1) {
+                cameraManager.turnOnTorchWithStrengthLevel(
+                    cameraId,
+                    (supportedMaxLevel * level).roundToInt()
+                )
+                if (isJavaScriptCallbackNeeded) {
+                    sendToJavaScript(null)
+                }
+            } else {
+                //Simply turn torch on
+                turnTorch(true, isJavaScriptCallbackNeeded)
+            }
+        } else {
+            //Simply turn torch on
+            turnTorch(true, isJavaScriptCallbackNeeded)
+        }
+    }
+
     // Using methods of camera2 API to turn torch on/off when front camera is active
     private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
         val cameraId = cameraManager.cameraIdList[0]
@@ -74,6 +101,64 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             }
         } catch (e: CameraAccessException) {
             errorToJavaScript("Camera access denied")
+        }
+    }
+
+    private fun adjustedIntenseLevel(level: Float): Float {
+        val minLevel = 0.001F
+        val maxLevel = 1.0F
+        return if (level < minLevel) minLevel else (if (level > maxLevel) maxLevel else level)
+    }
+
+    private fun debugMessageToJS(message: String) {
+        // Is used for debug purposes
+//        sendToJavaScript(null, message)
+    }
+
+    private fun advancedSparkle(rampUpMs: Int?, sustainMs: Int?, rampDownMs: Int?, intensity: Double?) {
+        val deltaLevel = 0.1F
+
+        if ((rampUpMs != null) && (sustainMs != null) && (rampDownMs != null) && (intensity != null)) {
+            val totalDuration = rampUpMs + sustainMs + rampDownMs
+            val intenseLevel = adjustedIntenseLevel(intensity.toFloat())
+            val flashThread = Thread {
+                try {
+                    val framesSteps = (intenseLevel / deltaLevel).roundToInt()
+                    if (rampUpMs > 0) {
+                        val delayUpMs = rampUpMs / framesSteps
+                        for (i in 0 .. framesSteps - 1) {
+                            val levelUp = i * deltaLevel
+                            debugMessageToJS("rampUp: $levelUp")
+                            turnTorchToLevel(adjustedIntenseLevel(levelUp), false)
+                            Thread.sleep(delayUpMs.toLong())
+                        }
+                    }
+                    if (sustainMs > 0) {
+                        debugMessageToJS("sustain: $intenseLevel")
+                        turnTorchToLevel(adjustedIntenseLevel(intenseLevel), false)
+                        Thread.sleep(sustainMs.toLong())
+                    }
+                    if (rampDownMs > 0) {
+                        val delayDownMs = rampDownMs / framesSteps
+                        for (i in framesSteps - 1 downTo 0) {
+                            val levelDown = i * deltaLevel
+                            debugMessageToJS("rampDown: $levelDown")
+                            turnTorchToLevel(adjustedIntenseLevel(levelDown), false)
+                            Thread.sleep(delayDownMs.toLong())
+                        }
+                    }
+                } catch (e: InterruptedException) {
+                    debugMessageToJS("interrupted by time: $totalDuration ms")
+                }
+                turnTorch(false, false)
+                sendToJavaScript(null)
+            }
+            flashThread.start()
+            Handler(Looper.getMainLooper()).postDelayed({
+                flashThread.interrupt()
+            }, totalDuration.toLong())
+        } else {
+            errorToJavaScript("Cannot be null rampUpMs: $rampUpMs, sustainMs: $sustainMs, rampDownMs: $rampDownMs, intensity: $intensity")
         }
     }
 
@@ -195,6 +280,15 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         }
     }
 
+    // Params like 1.00 come from JSON.stringify as Int and give null as? Double
+    private fun getAsDouble(param: Any?): Double? {
+        var result = param as? Double
+        if (result == null) {
+            result = (param as? Int)?.toDouble()
+        }
+        return result
+    }
+
     private fun processParams(params: JSONArray?) {
         params?.let {
             val requestId = params[0] as? Int
@@ -205,12 +299,34 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 if ((serviceName != null) && (methodName != null)) {
                     if (serviceName == torchServiceName) {
                         when(methodName){
-                            onMethodName -> turnTorch(true)
+                            onMethodName -> {
+                                if (params.length() > 3) {
+                                    val level = params[3] as? Double
+                                    if (level != null) {
+                                        turnTorchToLevel(level.toFloat())
+                                    } else {
+                                        errorToJavaScript("Level cannot be null")
+                                    }
+                                } else {
+                                    turnTorch(true)
+                                }
+                            }
                             offMethodName -> turnTorch(false)
                             checkIsOnMethodName -> checkIsTorchOn()
                             sparkleMethodName -> {
                                 val duration = params[3] as? Int
                                 sparkle(duration)
+                            }
+                            advancedSparkleMethodName -> {
+                                if (params.length() > 6) {
+                                    val rampUpMs = params[3] as? Int
+                                    val sustainMs = params[4] as? Int
+                                    val rampDownMs = params[5] as? Int
+                                    val intensity = getAsDouble(params[6])
+                                    advancedSparkle(rampUpMs, sustainMs, rampDownMs, intensity)
+                                } else {
+                                    errorToJavaScript("Needed more params for advancedSparkle: rampUpMs: Int, sustainMs: Int, rampDownMs: Int, intensity: Float")
+                                }
                             }
                             testErrorMethodName -> errorToJavaScript("This is the test error message")
                         }
