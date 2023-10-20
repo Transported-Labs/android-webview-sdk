@@ -115,41 +115,43 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
 //        sendToJavaScript(null, message)
     }
 
+    private fun nowMs(): Long {
+        return Calendar.getInstance().timeInMillis
+    }
     private fun advancedSparkle(rampUpMs: Int?, sustainMs: Int?, rampDownMs: Int?, intensity: Double?) {
-        val deltaLevel = 0.1F
-
+        val blinkDelayMs: Long = 50
         if ((rampUpMs != null) && (sustainMs != null) && (rampDownMs != null) && (intensity != null)) {
             val totalDuration = rampUpMs + sustainMs + rampDownMs
             val intenseLevel = adjustedIntenseLevel(intensity.toFloat())
             val flashThread = Thread {
                 try {
-                    val framesSteps = (intenseLevel / deltaLevel).roundToInt()
-                    if (rampUpMs > 0) {
-                        val delayUpMs = rampUpMs / framesSteps
-                        for (i in 0 .. framesSteps - 1) {
-                            val levelUp = i * deltaLevel
-                            debugMessageToJS("rampUp: $levelUp")
-                            turnTorchToLevel(adjustedIntenseLevel(levelUp), false)
-                            Thread.sleep(delayUpMs.toLong())
-                        }
+                    val rampUpStart = nowMs()
+                    var currentRampUpTime: Long = 0
+                    while (currentRampUpTime < rampUpMs) {
+                        val upIntensity: Float = (currentRampUpTime.toFloat() / rampUpMs.toFloat()) * intenseLevel
+                        debugMessageToJS("rampUp: $upIntensity")
+                        turnTorchToLevel(adjustedIntenseLevel(upIntensity), false)
+                        Thread.sleep(blinkDelayMs)
+                        currentRampUpTime = nowMs() - rampUpStart
                     }
                     if (sustainMs > 0) {
                         debugMessageToJS("sustain: $intenseLevel")
                         turnTorchToLevel(adjustedIntenseLevel(intenseLevel), false)
                         Thread.sleep(sustainMs.toLong())
                     }
-                    if (rampDownMs > 0) {
-                        val delayDownMs = rampDownMs / framesSteps
-                        for (i in framesSteps - 1 downTo 0) {
-                            val levelDown = i * deltaLevel
-                            debugMessageToJS("rampDown: $levelDown")
-                            turnTorchToLevel(adjustedIntenseLevel(levelDown), false)
-                            Thread.sleep(delayDownMs.toLong())
-                        }
+                    val rampDownStart = nowMs()
+                    var currentRampDownTime: Long = 0
+                    while (currentRampDownTime < rampDownMs){
+                        val downIntensity = (1.0 - currentRampDownTime.toFloat() / rampDownMs.toFloat()) * intenseLevel
+                        debugMessageToJS("rampDown: $downIntensity")
+                        turnTorchToLevel(adjustedIntenseLevel(downIntensity.toFloat()), false)
+                        Thread.sleep(blinkDelayMs)
+                        currentRampDownTime = nowMs() - rampDownStart
                     }
                 } catch (e: InterruptedException) {
                     debugMessageToJS("interrupted by time: $totalDuration ms")
                 }
+                debugMessageToJS("turned off inside")
                 turnTorch(false, false)
                 sendToJavaScript(null)
             }
