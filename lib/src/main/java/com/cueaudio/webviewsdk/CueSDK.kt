@@ -41,6 +41,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
     private val askSavePhotoMethodName = "getSavePhotoPermission"
+    private val hasMicMethodName = "hasMicPermission"
+    private val hasCamMethodName = "hasCameraPermission"
+    private val hasSavePhotoMethodName = "hasSavePhotoPermission"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
@@ -231,6 +234,35 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             errorToJavaScript("Duration: $duration is not valid value")
         }
     }
+    private fun hasPermission(requestCode: Int) {
+        var permissionType = ""
+        when (requestCode) {
+            PermissionConstant.ASK_CAMERA_REQUEST -> {
+                permissionType = Manifest.permission.CAMERA
+            }
+            PermissionConstant.ASK_MICROPHONE_REQUEST -> {
+                permissionType = Manifest.permission.RECORD_AUDIO
+            }
+            PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+                    // Not ask for permission for Android 11+
+                    sendToJavaScript(true)
+                    return
+                } else {
+                    permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }
+            }
+        }
+        if (permissionType != "") {
+            val permission: Int =
+                ContextCompat.checkSelfPermission(mContext, permissionType)
+            val result = (permission == PackageManager.PERMISSION_GRANTED)
+            sendToJavaScript(result)
+        } else {
+            errorToJavaScript("PermissionID can not be empty")
+        }
+    }
+
     private fun askForPermission(requestCode: Int) {
         var permissionType = ""
         when (requestCode) {
@@ -357,6 +389,15 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             }
                             askSavePhotoMethodName ->  {
                                 askForPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
+                            }
+                            hasMicMethodName ->  {
+                                hasPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
+                            }
+                            hasCamMethodName ->  {
+                                hasPermission(PermissionConstant.ASK_CAMERA_REQUEST)
+                            }
+                            hasSavePhotoMethodName ->  {
+                                hasPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
                             }
                         }
                     } else {
