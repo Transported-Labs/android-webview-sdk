@@ -30,6 +30,8 @@
             android:name=".WebViewActivity"
             android:exported="true">
         </activity>
+        <activity android:name=".CameraViewActivity"
+            android:exported="true"/>
     </application>
 
 </manifest>
