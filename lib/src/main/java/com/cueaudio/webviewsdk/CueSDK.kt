@@ -3,7 +3,6 @@ package com.cueaudio.webviewsdk
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
@@ -14,7 +13,6 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.startActivity
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
@@ -49,10 +47,9 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val hasCamMethodName = "hasCameraPermission"
     private val hasSavePhotoMethodName = "hasSavePhotoPermission"
     private val testErrorMethodName = "testError"
-
+    private val cameraSparkleMethod = "cameraSparkle"
     private var curRequestId: Int? = null
     private var isFlashlightOn = false
-    private var isSparklingOn = false
 
     private val cameraManager: CameraManager = mContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val torchCallback: TorchCallback = object : TorchCallback() {
@@ -61,6 +58,8 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             isFlashlightOn = enabled
         }
     }
+
+    private  var flashThread : Thread = Thread()
 
     init {
         cameraManager.registerTorchCallback(torchCallback, null)
@@ -174,10 +173,10 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     private fun sparkle(duration: Int?) {
         if (duration != null) {
-            val flashThread = Thread {
+            flashThread = Thread {
                 var isOn = false
                 var isSparkling = true
-                isSparklingOn = true
+                //isSparklingOn = true
                 val blinkDelay: Long = 50
                 while (isSparkling) {
                     isOn = !isOn
@@ -187,7 +186,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                     } catch (e: InterruptedException) {
                         turnTorch(false, false)
                         isSparkling = false
-                        isSparklingOn = false
+                        //      isSparklingOn = false
                     }
                 }
             }
@@ -356,7 +355,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             checkIsOnMethodName -> checkIsTorchOn()
                             sparkleMethodName -> {
                                 val duration = params[3] as? Int
-                                sparkle(duration)
+                                if((mContext as WebViewActivity).isCameraOn){
+                                    if(!flashThread.isInterrupted){
+                                        flashThread.interrupt()
+                                    }
+                                    (mContext as WebViewActivity).sparkle(duration)
+                                }else{
+                                    sparkle(duration)
+                                }
                             }
                             advancedSparkleMethodName -> {
                                 if (params.length() > 6) {
@@ -410,7 +416,19 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                     }else if(serviceName == cameraServiceName){
                         when(methodName){
                             openCameraMethodName ->{
+
+                                (mContext as WebViewActivity).isCameraOn = true
                                 openCamera()
+                            }
+                            cameraSparkleMethod ->{
+                                if((mContext as WebViewActivity).isCameraOn){
+                                    if(!flashThread.isInterrupted){
+                                        flashThread.interrupt()
+                                        (mContext as WebViewActivity).sparkle(1000)
+                                    }
+                                }
+                                else
+                                    sparkle(1000)
                             }
                         }
                     }
@@ -426,9 +444,10 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun openCamera() {
-        val intent : Intent = Intent(mContext as WebViewActivity, CameraViewActivity::class.java)
-        intent.putExtra("isSparklingOn", isSparklingOn)
-        startActivity(mContext, intent, null)
+//        val intent : Intent = Intent(mContext as WebViewActivity, CameraViewActivity::class.java)
+//        intent.putExtra("isSparklingOn", isSparklingOn)
+//        startActivity(mContext, intent, null)
+        (mContext as WebViewActivity).startCamera()
 
     }
 
