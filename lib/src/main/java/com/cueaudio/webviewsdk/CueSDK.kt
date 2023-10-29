@@ -17,6 +17,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
 import java.io.FileNotFoundException
+import java.lang.Exception
 import java.util.*
 import kotlin.math.roundToInt
 
@@ -75,26 +76,31 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun turnTorchToLevel(level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
-        val cameraId = cameraManager.cameraIdList[0]
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-            val supportedMaxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
-            // Check if camera supports Torch Strength Control
-            if ((supportedMaxLevel != null) && (supportedMaxLevel > 1)) {
-                val strengthLevel = (supportedMaxLevel * level).roundToInt()
-                if (strengthLevel > 0) {
-                    cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
-                }
-                if (isJavaScriptCallbackNeeded) {
-                    sendToJavaScript(null)
+        try {
+            val cameraId = cameraManager.cameraIdList[0]
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                val supportedMaxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
+                // Check if camera supports Torch Strength Control
+                if ((supportedMaxLevel != null) && (supportedMaxLevel > 1)) {
+                    val strengthLevel = (supportedMaxLevel * level).roundToInt()
+                    if (strengthLevel > 0) {
+                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
+                    }
+                    if (isJavaScriptCallbackNeeded) {
+                        sendToJavaScript(null)
+                    }
+                } else {
+                    //Simply turn torch on
+                    turnTorch(true, isJavaScriptCallbackNeeded)
                 }
             } else {
                 //Simply turn torch on
                 turnTorch(true, isJavaScriptCallbackNeeded)
             }
-        } else {
-            //Simply turn torch on
-            turnTorch(true, isJavaScriptCallbackNeeded)
+        } catch (e: Exception){
+            val errorMessage = e.localizedMessage
+            errorToJavaScript("Method turnTorchToLevel raised error: $errorMessage")
         }
     }
 
