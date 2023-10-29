@@ -82,7 +82,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             // Check if camera supports Torch Strength Control
             if ((supportedMaxLevel != null) && (supportedMaxLevel > 1)) {
                 val strengthLevel = (supportedMaxLevel * level).roundToInt()
-                if (level > 0) {
+                if (strengthLevel > 0) {
                     cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
                 }
                 if (isJavaScriptCallbackNeeded) {
