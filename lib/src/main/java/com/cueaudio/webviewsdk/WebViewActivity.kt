@@ -11,6 +11,7 @@ import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
@@ -32,38 +33,42 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.math.roundToInt
 
 
 class WebViewActivity : AppCompatActivity() {
 
     private val cueSDKName = "cueSDK"
     private lateinit var webView: WebView
-    private lateinit var cameraTextureView : TextureView
-    private lateinit var cameraLayout : RelativeLayout
-    private lateinit var closeButton : Button
-    private lateinit var videoButton : Button
+    private lateinit var cameraTextureView: TextureView
+    private lateinit var cameraLayout: RelativeLayout
+    private lateinit var closeButton: Button
+    private lateinit var videoButton: Button
     lateinit var cameraManager: CameraManager
     lateinit var cameraCaptureSession: CameraCaptureSession
     lateinit var videoCaptureSession: CameraCaptureSession
     lateinit var cameraDevice: CameraDevice
     lateinit var captureRequest: CaptureRequest
     lateinit var capReq: CaptureRequest.Builder
-    private lateinit var  videoHandler : Handler
+    private lateinit var videoHandler: Handler
     private lateinit var cueSDK: CueSDK
-    private val userAgentString = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+    private val userAgentString =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
     private var isFlashlightOn = false
     var isCameraOn = false
     private var isRecording = false
     private var isSparkling = false
-    private val videoHandlerThread : HandlerThread = HandlerThread("videoThread")
-    private val torchCallback: CameraManager.TorchCallback = object : CameraManager.TorchCallback() {
-        override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
-            super.onTorchModeChanged(cameraId, enabled)
-            isFlashlightOn = enabled
+    private val videoHandlerThread: HandlerThread = HandlerThread("videoThread")
+    private val torchCallback: CameraManager.TorchCallback =
+        object : CameraManager.TorchCallback() {
+            override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                super.onTorchModeChanged(cameraId, enabled)
+                isFlashlightOn = enabled
+            }
         }
-    }
 
-    private var flashThread : Thread = Thread("flashThread")
+    private var flashThread: Thread = Thread("flashThread")
+
 
     private val mediaRecorder by lazy {
         MediaRecorder()
@@ -89,16 +94,27 @@ class WebViewActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
             }
-            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
                 super.onReceivedHttpError(view, request, errorResponse)
                 if (errorResponse != null) {
                     alertInternetError(errorResponse.reasonPhrase)
                 }
             }
-            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
                 super.onReceivedError(view, request, error)
 
             }
+
             @Deprecated("Deprecated in Java")
             override fun onReceivedError(
                 view: WebView?,
@@ -114,14 +130,14 @@ class WebViewActivity : AppCompatActivity() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
-                    request.grant(request.resources) }
+                    request.grant(request.resources)
+                }
             }
-
 
 
         }
         cameraTextureView.surfaceTexture?.setDefaultBufferSize(1080, 720)
-        cameraTextureView.surfaceTextureListener = object:TextureView.SurfaceTextureListener{
+        cameraTextureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(
                 surface: SurfaceTexture,
                 width: Int,
@@ -150,7 +166,7 @@ class WebViewActivity : AppCompatActivity() {
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         cameraManager.registerTorchCallback(torchCallback, null)
         videoHandlerThread.start()
-        videoHandler = Handler((videoHandlerThread ).looper)
+        videoHandler = Handler((videoHandlerThread).looper)
         cueSDK = CueSDK(this, webView)
         webView.addJavascriptInterface(cueSDK, cueSDKName)
 
@@ -159,18 +175,18 @@ class WebViewActivity : AppCompatActivity() {
             webView.loadUrl(url)
         }
 
-        closeButton.setOnClickListener(){
+        closeButton.setOnClickListener {
             closeCamera()
-            runOnUiThread(){
+            runOnUiThread {
                 cameraLayout.visibility = View.GONE
                 webView.visibility = View.VISIBLE
             }
         }
 
-        videoButton.setOnClickListener(){
+        videoButton.setOnClickListener {
 
-            if(isRecording){
-                if(!flashThread.isInterrupted){
+            if (isRecording) {
+                if (!flashThread.isInterrupted) {
 
                     flashThread.interrupt()
                     isFlashlightOn = false
@@ -178,10 +194,10 @@ class WebViewActivity : AppCompatActivity() {
                 isRecording = false
                 stopRecordSession()
                 Toast.makeText(applicationContext, "Stop recording", Toast.LENGTH_SHORT).show()
-            }else{
-                if(flashThread.isInterrupted){
+            } else {
+                if (flashThread.isInterrupted) {
                     startRecordSession()
-                }else{
+                } else {
                     flashThread.interrupt()
                     startRecordSession()
                     Toast.makeText(applicationContext, "Start recording", Toast.LENGTH_SHORT).show()
@@ -191,21 +207,19 @@ class WebViewActivity : AppCompatActivity() {
     }
 
 
-    private fun closeCamera(){
+    private fun closeCamera() {
         isCameraOn = false
-        if(this::cameraCaptureSession.isInitialized)
+        if (this::cameraCaptureSession.isInitialized)
             cameraCaptureSession.close()
-        if(this::cameraDevice.isInitialized)
+        if (this::cameraDevice.isInitialized)
             cameraDevice.close()
 //        if(!flashThread.isInterrupted)
 //            flashThread.interrupt()
 
     }
 
-    fun startCamera(){
-       // println("cameras " + cameraManager.cameraIdList)
-
-        runOnUiThread{
+    fun startCamera() {
+        runOnUiThread {
             webView.visibility = View.GONE
             cameraLayout.visibility = View.VISIBLE
         }
@@ -217,7 +231,7 @@ class WebViewActivity : AppCompatActivity() {
         isCameraOn = true
         cameraManager.openCamera(cameraManager.cameraIdList[0],
             @SuppressLint("MissingPermission")
-            object: CameraDevice.StateCallback(){
+            object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
                     cameraDevice = camera
                     capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
@@ -225,25 +239,30 @@ class WebViewActivity : AppCompatActivity() {
                     capReq.addTarget(surface)
                     capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
                     capReq.set(
-                        CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+                        CaptureRequest.CONTROL_AF_MODE,
+                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
                     )
 
-                    cameraDevice.createCaptureSession(listOf(surface),object : CameraCaptureSession.StateCallback(){
-                        override fun onConfigured(session: CameraCaptureSession) {
-                            cameraCaptureSession = session
-                            cameraCaptureSession.setRepeatingRequest(capReq.build(), null, null)
-                        }
 
-                        override fun onConfigureFailed(session: CameraCaptureSession) {
+                    cameraDevice.createCaptureSession(
+                        listOf(surface),
+                        object : CameraCaptureSession.StateCallback() {
+                            override fun onConfigured(session: CameraCaptureSession) {
+                                cameraCaptureSession = session
+                                cameraCaptureSession.setRepeatingRequest(capReq.build(), null, null)
+                            }
 
-                        }
-                    },videoHandler)
+                            override fun onConfigureFailed(session: CameraCaptureSession) {
+
+                            }
+                        },
+                        videoHandler
+                    )
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
                     cameraDevice = camera
                     camera.close()
-                   // closeCamera()
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
@@ -252,9 +271,8 @@ class WebViewActivity : AppCompatActivity() {
                 }
 
 
-
-            }, videoHandler)
-
+            }, videoHandler
+        )
 
 
     }
@@ -277,13 +295,16 @@ class WebViewActivity : AppCompatActivity() {
         }
 
         cameraDevice.createCaptureSession(surfaces,
-            object: CameraCaptureSession.StateCallback(){
+            object : CameraCaptureSession.StateCallback() {
 
 
                 override fun onConfigured(session: CameraCaptureSession) {
                     if (session != null) {
                         videoCaptureSession = session
-                        capReq.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                        capReq.set(
+                            CaptureRequest.CONTROL_AF_MODE,
+                            CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+                        )
                         videoCaptureSession.setRepeatingRequest(capReq.build(), null, null)
                         isRecording = true
                         mediaRecorder.start()
@@ -296,7 +317,8 @@ class WebViewActivity : AppCompatActivity() {
                     Log.e(TAG, "creating record session failed!")
                 }
 
-            }, videoHandler)
+            }, videoHandler
+        )
     }
 
 
@@ -307,14 +329,18 @@ class WebViewActivity : AppCompatActivity() {
         webView.loadUrl("javascript:document.location=document.location")
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             PermissionConstant.ASK_CAMERA_REQUEST,
             PermissionConstant.ASK_MICROPHONE_REQUEST,
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 val granted = (grantResults.isNotEmpty()
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
                 cueSDK.callCurPermissionRequestGranted(granted)
             }
         }
@@ -324,38 +350,47 @@ class WebViewActivity : AppCompatActivity() {
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
+    fun advancedFlashTurn(time: Int) {
+        val advancedFlashTread = Thread {
+            turnTorch(true)
+        }
+        advancedFlashTread.start()
+        Handler(Looper.getMainLooper()).postDelayed({
+            turnTorch(false)
+            advancedFlashTread.interrupt()
+        }, time.toLong())
+    }
 
-    private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
+    fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
         try {
-            if(isOn){
-                capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
-            }else{
+            if (isOn) {
                 capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH)
+            } else {
+                capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
             }
 
-            if(this :: cameraCaptureSession.isInitialized ) {
-            }else if(this :: videoCaptureSession.isInitialized){
+            if (this::cameraCaptureSession.isInitialized) {
+            } else if (this::videoCaptureSession.isInitialized) {
                 videoCaptureSession.setRepeatingRequest(capReq.build(), null, videoHandler)
             }
 
-            try{
+            try {
                 cameraCaptureSession.setRepeatingRequest(capReq.build(), null, videoHandler)
                 return
-            }catch (e:Exception){
+            } catch (e: Exception) {
                 Log.i("torch cameraCapture session", e.localizedMessage)
             }
 
-            try{
+            try {
                 videoCaptureSession.setRepeatingRequest(capReq.build(), null, videoHandler)
                 return
-            }catch (e:Exception){
+            } catch (e: Exception) {
                 Log.i("torch video Capture session", e.localizedMessage)
             }
         } catch (e: CameraAccessException) {
             Log.i("torch CameraAccessDenied", e.localizedMessage)
         }
     }
-
 
 
     fun sparkle(duration: Int?) {
@@ -381,7 +416,7 @@ class WebViewActivity : AppCompatActivity() {
                 isSparkling = false
             }, duration.toLong())
         } else {
-            Log.i("Duration", "Duration is not valid value" )
+            Log.i("Duration", "Duration is not valid value")
         }
     }
 
@@ -392,26 +427,34 @@ class WebViewActivity : AppCompatActivity() {
     }
 
     private fun createVideoFile(): File {
-        val videoFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), createVideoFileName())
+        val videoFile = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            createVideoFileName()
+        )
         currentVideoFilePath = videoFile.absolutePath
         return videoFile
     }
 
-    private fun <T> cameraCharacteristics(cameraId: String, key: CameraCharacteristics.Key<T>) :T {
+    private fun <T> cameraCharacteristics(cameraId: String, key: CameraCharacteristics.Key<T>): T {
         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
         return when (key) {
             CameraCharacteristics.LENS_FACING -> characteristics.get(key)!!
             CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP -> characteristics.get(key)!!
             CameraCharacteristics.SENSOR_ORIENTATION -> characteristics.get(key)!!
-            else -> throw  IllegalArgumentException("Key not recognized")
+            else -> throw IllegalArgumentException("Key not recognized")
         }
     }
 
-    private fun cameraId(lens: Int) : String {
+    private fun cameraId(lens: Int): String {
         var deviceId = listOf<String>()
         try {
             val cameraIdList = cameraManager.cameraIdList
-            deviceId = cameraIdList.filter { lens == cameraCharacteristics(it, CameraCharacteristics.LENS_FACING) }
+            deviceId = cameraIdList.filter {
+                lens == cameraCharacteristics(
+                    it,
+                    CameraCharacteristics.LENS_FACING
+                )
+            }
         } catch (e: CameraAccessException) {
             Log.e(TAG, e.toString())
         }
@@ -420,7 +463,7 @@ class WebViewActivity : AppCompatActivity() {
 
 
     private fun setupMediaRecorder() {
-        val rotation = this?.windowManager?.defaultDisplay?.rotation
+        val rotation = this.windowManager?.defaultDisplay?.rotation
         val sensorOrientation = cameraCharacteristics(
             cameraId(CameraCharacteristics.LENS_FACING_BACK),
             CameraCharacteristics.SENSOR_ORIENTATION
@@ -428,6 +471,7 @@ class WebViewActivity : AppCompatActivity() {
         when (sensorOrientation) {
             SENSOR_DEFAULT_ORINTATION_DEGREES ->
                 mediaRecorder.setOrientationHint(DEFAULT_ORIENTATION.get(rotation!!))
+
             SENSOR_INVERSE_ORINTATION_DEGREES ->
                 mediaRecorder.setOrientationHint(INVERSE_ORIENTATION.get(rotation!!))
         }
@@ -454,10 +498,12 @@ class WebViewActivity : AppCompatActivity() {
             }
         }
     }
+
     companion object {
         const val REQUEST_CAMERA_PERMISSION = 100
         private val TAG = WebViewActivity::class.qualifiedName
-        @JvmStatic fun newInstance() = WebViewActivity
+        @JvmStatic
+        fun newInstance() = WebViewActivity
         private val SENSOR_DEFAULT_ORINTATION_DEGREES = 90
         private val SENSOR_INVERSE_ORINTATION_DEGREES = 270
         private val DEFAULT_ORIENTATION = SparseIntArray().apply {
