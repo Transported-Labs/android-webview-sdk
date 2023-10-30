@@ -3,6 +3,7 @@ package com.cueaudio.webviewsdk
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.ImageFormat
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
@@ -10,8 +11,8 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
+import android.media.ImageReader
 import android.media.MediaRecorder
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
@@ -24,32 +25,38 @@ import android.view.TextureView
 import android.view.View
 import android.webkit.*
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.RelativeLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import java.io.File
+import java.io.FileOutputStream
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Timer
-import java.util.TimerTask
-import kotlin.math.roundToInt
 
 
 class WebViewActivity : AppCompatActivity() {
 
     private val cueSDKName = "cueSDK"
+    private val openCameraMethodName = "openCamera"
+    private val openPhotoCameraMethod = "openPhotoCamera"
+    private val openVideoCameraMethod = "openVideoCamera"
     private lateinit var webView: WebView
     private lateinit var cameraTextureView: TextureView
     private lateinit var cameraLayout: RelativeLayout
-    private lateinit var closeButton: Button
-    private lateinit var videoButton: Button
+    private lateinit var closeButton: ImageButton
+    private lateinit var videoButton: ImageButton
+    private lateinit var imageButton: ImageButton
     lateinit var cameraManager: CameraManager
     lateinit var cameraCaptureSession: CameraCaptureSession
     lateinit var videoCaptureSession: CameraCaptureSession
+    lateinit var imageCaptureSession: CameraCaptureSession
     lateinit var cameraDevice: CameraDevice
     lateinit var captureRequest: CaptureRequest
     lateinit var capReq: CaptureRequest.Builder
+    lateinit var imageReader : ImageReader
     private lateinit var videoHandler: Handler
     private lateinit var cueSDK: CueSDK
     private val userAgentString =
@@ -86,6 +93,7 @@ class WebViewActivity : AppCompatActivity() {
         cameraLayout = findViewById(R.id.cameraLayout)
         closeButton = findViewById(R.id.closeButton)
         videoButton = findViewById(R.id.videoButton)
+        imageButton = findViewById(R.id.imageButton)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.mediaPlaybackRequiresUserGesture = false
@@ -162,6 +170,7 @@ class WebViewActivity : AppCompatActivity() {
 
             }
         }
+
         cameraLayout.visibility = View.GONE
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         cameraManager.registerTorchCallback(torchCallback, null)
@@ -192,9 +201,15 @@ class WebViewActivity : AppCompatActivity() {
                     isFlashlightOn = false
                 }
                 isRecording = false
+                runOnUiThread {
+                    videoButton.setImageDrawable(ContextCompat.getDrawable(this,R.drawable.record_start_s))
+                }
                 stopRecordSession()
                 Toast.makeText(applicationContext, "Stop recording", Toast.LENGTH_SHORT).show()
             } else {
+                runOnUiThread {
+                    videoButton.setImageDrawable(ContextCompat.getDrawable(this,R.drawable.record_stop_s))
+                }
                 if (flashThread.isInterrupted) {
                     startRecordSession()
                 } else {
@@ -204,6 +219,37 @@ class WebViewActivity : AppCompatActivity() {
                 }
             }
         }
+
+        imageButton.setOnClickListener(){
+            capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+            capReq.addTarget(imageReader.surface)
+            cameraCaptureSession.capture(capReq.build(), null, null)
+
+        }
+
+        imageReader = ImageReader.newInstance(1080, 1920, ImageFormat.JPEG, 1)
+        imageReader.setOnImageAvailableListener(object:ImageReader.OnImageAvailableListener{
+            override fun onImageAvailable(reader: ImageReader?) {
+
+                var image = reader?.acquireLatestImage()
+                var buffer= image!!.planes[0].buffer
+                var bytes = ByteArray(buffer.remaining())
+                buffer.get(bytes)
+
+                var file = createImageFile()
+                var opStream = FileOutputStream(file)
+
+                opStream.write(bytes)
+                opStream.close()
+                image.close()
+                capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                val surface = Surface(cameraTextureView.surfaceTexture)
+                capReq.addTarget(surface)
+                cameraCaptureSession.capture(capReq.build(),null,null)
+                Toast.makeText(applicationContext, "Image is captured", Toast.LENGTH_SHORT).show()
+
+            }
+        }, videoHandler)
     }
 
 
@@ -218,10 +264,24 @@ class WebViewActivity : AppCompatActivity() {
 
     }
 
-    fun startCamera() {
+    fun startCamera(cameraMethod : String) {
         runOnUiThread {
             webView.visibility = View.GONE
             cameraLayout.visibility = View.VISIBLE
+            when(cameraMethod){
+                openCameraMethodName ->{
+                    videoButton.visibility = View.VISIBLE
+                    imageButton.visibility = View.VISIBLE
+                }
+                openVideoCameraMethod ->{
+                    videoButton.visibility = View.VISIBLE
+                    imageButton.visibility = View.GONE
+                }
+                openPhotoCameraMethod ->{
+                    videoButton.visibility = View.GONE
+                    imageButton.visibility = View.VISIBLE
+                }
+            }
         }
         openCamera()
     }
@@ -245,7 +305,7 @@ class WebViewActivity : AppCompatActivity() {
 
 
                     cameraDevice.createCaptureSession(
-                        listOf(surface),
+                        listOf(surface, imageReader.surface),
                         object : CameraCaptureSession.StateCallback() {
                             override fun onConfigured(session: CameraCaptureSession) {
                                 cameraCaptureSession = session
@@ -325,7 +385,6 @@ class WebViewActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         // To stop the audio / video playback
-        Toast.makeText(this, "Is Paused", Toast.LENGTH_SHORT).show()
         webView.loadUrl("javascript:document.location=document.location")
     }
 
@@ -433,6 +492,20 @@ class WebViewActivity : AppCompatActivity() {
         )
         currentVideoFilePath = videoFile.absolutePath
         return videoFile
+    }
+
+    @SuppressLint("SimpleDateFormat")
+    private fun createImageFileName(): String {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+        return "IMAGE_${timestamp}.jpeg"
+    }
+
+    private fun createImageFile(): File {
+        //currentVideoFilePath = imageFile.absolutePath
+        return File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            createImageFileName()
+        )
     }
 
     private fun <T> cameraCharacteristics(cameraId: String, key: CameraCharacteristics.Key<T>): T {

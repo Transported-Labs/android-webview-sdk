@@ -38,6 +38,8 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val openCameraMethodName = "openCamera"
+    private val openPhotoCameraMethod = "openPhotoCamera"
+    private val openVideoCameraMethod = "openVideoCamera"
     private val checkIsOnMethodName = "isOn"
     private val vibrateMethodName = "vibrate"
     private val sparkleMethodName = "sparkle"
@@ -460,10 +462,20 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                         }
                     } else if (serviceName == cameraServiceName) {
                         when (methodName) {
-                            openCameraMethodName -> {
+                            openCameraMethodName-> {
 
                                 (mContext as WebViewActivity).isCameraOn = true
-                                openCamera()
+                                openCamera(methodName)
+                            }
+                            openPhotoCameraMethod-> {
+
+                                (mContext as WebViewActivity).isCameraOn = true
+                                openCamera(methodName)
+                            }
+                            openVideoCameraMethod-> {
+
+                                (mContext as WebViewActivity).isCameraOn = true
+                                openCamera(methodName)
                             }
 
                             cameraSparkleMethod -> {
@@ -486,11 +498,11 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
         }
     }
 
-    private fun openCamera() {
+    private fun openCamera(method : String) {
 //        val intent : Intent = Intent(mContext as WebViewActivity, CameraViewActivity::class.java)
 //        intent.putExtra("isSparklingOn", isSparklingOn)
 //        startActivity(mContext, intent, null)
-        (mContext as WebViewActivity).startCamera()
+        (mContext as WebViewActivity).startCamera(method)
 
     }
 
