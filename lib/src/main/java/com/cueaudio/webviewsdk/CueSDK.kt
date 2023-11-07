@@ -11,14 +11,12 @@ import android.hardware.camera2.CameraManager.TorchCallback
 import android.os.*
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
 import java.io.FileNotFoundException
-import java.lang.Exception
 import java.util.*
 import kotlin.math.roundToInt
 
@@ -104,22 +102,21 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                 //Simply turn torch on
                 turnTorch(true, isJavaScriptCallbackNeeded)
             }
-        } catch (e: Exception) {
-            val errorMessage = e.localizedMessage
-            errorToJavaScript("Method turnTorchToLevel raised error: $errorMessage")
+        } catch (e: CameraAccessException){
+            errorToJavaScript("Method turnTorchToLevel - Camera access denied: " + e.localizedMessage)
         }
     }
 
     // Using methods of camera2 API to turn torch on/off when front camera is active
     private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
-        val cameraId = cameraManager.cameraIdList[0]
         try {
+            val cameraId = cameraManager.cameraIdList[0]
             cameraManager.setTorchMode(cameraId, isOn)
             if (isJavaScriptCallbackNeeded) {
                 sendToJavaScript(null)
             }
         } catch (e: CameraAccessException) {
-            errorToJavaScript("Camera access denied")
+            errorToJavaScript("Method turnTorch - Camera access denied: " + e.localizedMessage)
         }
     }
 

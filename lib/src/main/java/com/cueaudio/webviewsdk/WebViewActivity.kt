@@ -43,6 +43,8 @@ class WebViewActivity : AppCompatActivity() {
     private val openCameraMethodName = "openCamera"
     private val openPhotoCameraMethod = "openPhotoCamera"
     private val openVideoCameraMethod = "openVideoCamera"
+    private lateinit var webViewLayout: View
+    private lateinit var exitButton: ImageButton
     private lateinit var webView: WebView
     private lateinit var cameraTextureView: TextureView
     private lateinit var cameraLayout: RelativeLayout
@@ -88,7 +90,9 @@ class WebViewActivity : AppCompatActivity() {
 
         supportActionBar?.hide()
         setContentView(R.layout.lib_main)
-        webView = findViewById<WebView>(R.id.webView)
+        webViewLayout = findViewById(R.id.webViewLayout)
+        exitButton = findViewById(R.id.exitButton)
+        webView = findViewById(R.id.webView)
         cameraTextureView = findViewById(R.id.cameraTextureView)
         cameraLayout = findViewById(R.id.cameraLayout)
         closeButton = findViewById(R.id.closeButton)
@@ -184,11 +188,15 @@ class WebViewActivity : AppCompatActivity() {
             webView.loadUrl(url)
         }
 
+        exitButton.setOnClickListener {
+            webView.loadUrl("about:blank")
+            finish()
+        }
         closeButton.setOnClickListener {
             closeCamera()
             runOnUiThread {
                 cameraLayout.visibility = View.GONE
-                webView.visibility = View.VISIBLE
+                webViewLayout.visibility = View.VISIBLE
             }
         }
 
@@ -266,7 +274,7 @@ class WebViewActivity : AppCompatActivity() {
 
     fun startCamera(cameraMethod : String) {
         runOnUiThread {
-            webView.visibility = View.GONE
+            webViewLayout.visibility = View.GONE
             cameraLayout.visibility = View.VISIBLE
             when(cameraMethod){
                 openCameraMethodName ->{
