@@ -373,7 +373,12 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                                     if (level != null) {
                                         turnTorchToLevel(level.toFloat())
                                     } else {
-                                        errorToJavaScript("Level cannot be null")
+                                        val levelInt = params[3] as? Int
+                                        if (levelInt != null) {
+                                            turnTorchToLevel(levelInt.toFloat())
+                                        } else {
+                                            errorToJavaScript("Level cannot be null")
+                                        }
                                     }
                                 } else {
                                     turnTorch(true)
