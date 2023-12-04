@@ -47,7 +47,7 @@ class WebViewActivity : AppCompatActivity() {
     private lateinit var exitButton: ImageButton
     private lateinit var webView: WebView
     private lateinit var cameraTextureView: TextureView
-    private lateinit var cameraLayout: RelativeLayout
+    private lateinit var cameraLayout: View
     private lateinit var closeButton: ImageButton
     private lateinit var videoButton: ImageButton
     private lateinit var imageButton: ImageButton
@@ -114,7 +114,7 @@ class WebViewActivity : AppCompatActivity() {
             ) {
                 super.onReceivedHttpError(view, request, errorResponse)
                 if (errorResponse != null) {
-                    alertInternetError(errorResponse.reasonPhrase)
+                    toastMessage(errorResponse.reasonPhrase)
                 }
             }
 
@@ -135,7 +135,7 @@ class WebViewActivity : AppCompatActivity() {
                 failingUrl: String?
             ) {
                 if (description != null) {
-                    alertInternetError(description.toString())
+                    toastMessage(description.toString())
                 }
             }
         }
@@ -155,8 +155,7 @@ class WebViewActivity : AppCompatActivity() {
                 width: Int,
                 height: Int
             ) {
-                //openCamera()
-
+                openCamera()
             }
 
             override fun onSurfaceTextureSizeChanged(
@@ -238,24 +237,26 @@ class WebViewActivity : AppCompatActivity() {
         imageReader = ImageReader.newInstance(1080, 1920, ImageFormat.JPEG, 1)
         imageReader.setOnImageAvailableListener(object:ImageReader.OnImageAvailableListener{
             override fun onImageAvailable(reader: ImageReader?) {
+                try {
+                    var image = reader?.acquireLatestImage()
+                    var buffer= image!!.planes[0].buffer
+                    var bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
 
-                var image = reader?.acquireLatestImage()
-                var buffer= image!!.planes[0].buffer
-                var bytes = ByteArray(buffer.remaining())
-                buffer.get(bytes)
+                    var file = createImageFile()
+                    var opStream = FileOutputStream(file)
 
-                var file = createImageFile()
-                var opStream = FileOutputStream(file)
-
-                opStream.write(bytes)
-                opStream.close()
-                image.close()
-                capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-                val surface = Surface(cameraTextureView.surfaceTexture)
-                capReq.addTarget(surface)
-                cameraCaptureSession.capture(capReq.build(),null,null)
-                Toast.makeText(applicationContext, "Image is captured", Toast.LENGTH_SHORT).show()
-
+                    opStream.write(bytes)
+                    opStream.close()
+                    image.close()
+                    capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                    val surface = Surface(cameraTextureView.surfaceTexture)
+                    capReq.addTarget(surface)
+                    cameraCaptureSession.capture(capReq.build(),null,null)
+                    Toast.makeText(applicationContext, "Image is captured", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    toastMessage("Error occurred: ${e.localizedMessage}")
+                }
             }
         }, videoHandler)
     }
@@ -291,7 +292,9 @@ class WebViewActivity : AppCompatActivity() {
                 }
             }
         }
-        openCamera()
+        if (cameraTextureView.isAvailable) {
+            openCamera()
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -301,31 +304,35 @@ class WebViewActivity : AppCompatActivity() {
             @SuppressLint("MissingPermission")
             object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
-                    cameraDevice = camera
-                    capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-                    val surface = Surface(cameraTextureView.surfaceTexture)
-                    capReq.addTarget(surface)
-                    capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
-                    capReq.set(
-                        CaptureRequest.CONTROL_AF_MODE,
-                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
-                    )
+                    try {
+                        cameraDevice = camera
+                        capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                        val surface = Surface(cameraTextureView.surfaceTexture)
+                        capReq.addTarget(surface)
+                        capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
+                        capReq.set(
+                            CaptureRequest.CONTROL_AF_MODE,
+                            CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+                        )
 
 
-                    cameraDevice.createCaptureSession(
-                        listOf(surface, imageReader.surface),
-                        object : CameraCaptureSession.StateCallback() {
-                            override fun onConfigured(session: CameraCaptureSession) {
-                                cameraCaptureSession = session
-                                cameraCaptureSession.setRepeatingRequest(capReq.build(), null, null)
-                            }
+                        cameraDevice.createCaptureSession(
+                            listOf(surface, imageReader.surface),
+                            object : CameraCaptureSession.StateCallback() {
+                                override fun onConfigured(session: CameraCaptureSession) {
+                                    cameraCaptureSession = session
+                                    cameraCaptureSession.setRepeatingRequest(capReq.build(), null, null)
+                                }
 
-                            override fun onConfigureFailed(session: CameraCaptureSession) {
+                                override fun onConfigureFailed(session: CameraCaptureSession) {
 
-                            }
-                        },
-                        videoHandler
-                    )
+                                }
+                            },
+                            videoHandler
+                        )
+                    } catch (e: Exception) {
+                        toastMessage("Error occurred: ${e.localizedMessage}")
+                    }
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
@@ -413,7 +420,7 @@ class WebViewActivity : AppCompatActivity() {
         }
     }
 
-    private fun alertInternetError(message: String) {
+    private fun toastMessage(message: String) {
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
@@ -454,7 +461,7 @@ class WebViewActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.i("torch video Capture session", e.localizedMessage)
             }
-        } catch (e: CameraAccessException) {
+        } catch (e: Exception) {
             Log.i("torch CameraAccessDenied", e.localizedMessage)
         }
     }
@@ -573,9 +580,8 @@ class WebViewActivity : AppCompatActivity() {
             try {
                 stop()
                 reset()
-            } catch (e: IllegalStateException) {
-                Toast.makeText(applicationContext, "Ty bil prab", Toast.LENGTH_SHORT).show()
-                Log.e(TAG, e.toString())
+            } catch (e: Exception) {
+                toastMessage("Error occurred: ${e.localizedMessage}")
             }
         }
     }
@@ -602,7 +608,11 @@ class WebViewActivity : AppCompatActivity() {
     }
 
     private fun startRecordSession() {
-        recordSession()
+        try {
+            recordSession()
+        } catch (e: Exception) {
+            toastMessage("Error occurred: ${e.localizedMessage}")
+        }
     }
 
     private fun stopRecordSession() {
