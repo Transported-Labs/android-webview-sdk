@@ -518,7 +518,7 @@ class WebViewActivity : AppCompatActivity() {
     private fun createImageFile(): File {
         //currentVideoFilePath = imageFile.absolutePath
         return File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
             createImageFileName()
         )
     }
