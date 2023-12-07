@@ -234,7 +234,7 @@ class WebViewActivity : AppCompatActivity() {
 
         }
 
-        imageReader = ImageReader.newInstance(1080, 1920, ImageFormat.JPEG, 1)
+        imageReader = ImageReader.newInstance(1080, 720, ImageFormat.JPEG, 1)
         imageReader.setOnImageAvailableListener(object:ImageReader.OnImageAvailableListener{
             override fun onImageAvailable(reader: ImageReader?) {
                 try {
@@ -307,8 +307,10 @@ class WebViewActivity : AppCompatActivity() {
                     try {
                         cameraDevice = camera
                         capReq = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                        cameraTextureView.surfaceTexture?.setDefaultBufferSize(1080,720)
                         val surface = Surface(cameraTextureView.surfaceTexture)
                         capReq.addTarget(surface)
+                        capReq.set(CaptureRequest.JPEG_ORIENTATION, 90)
                         capReq.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
                         capReq.set(
                             CaptureRequest.CONTROL_AF_MODE,
