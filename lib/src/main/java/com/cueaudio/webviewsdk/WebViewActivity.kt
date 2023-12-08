@@ -24,9 +24,7 @@ import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.webkit.*
-import android.widget.Button
 import android.widget.ImageButton
-import android.widget.RelativeLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -38,6 +36,11 @@ import java.util.Date
 
 
 class WebViewActivity : AppCompatActivity() {
+    @SuppressLint("SimpleDateFormat")
+    private val fileFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
+    private val cueFolderName = "CUE Live"
+    private val photoFilePrefix = "cue-"
+    private val videoFilePrefix = "video-"
 
     private val cueSDKName = "cueSDK"
     private val openCameraMethodName = "openCamera"
@@ -496,31 +499,31 @@ class WebViewActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("SimpleDateFormat")
     private fun createVideoFileName(): String {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        return "VIDEO_${timestamp}.mp4"
+        val timestamp = fileFormat.format(Date())
+        return "$videoFilePrefix${timestamp}.mp4"
     }
 
     private fun createVideoFile(): File {
+        val videoFolder = Environment.DIRECTORY_MOVIES.toString()
         val videoFile = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory("$videoFolder${File.separator}$cueFolderName"),
             createVideoFileName()
         )
         currentVideoFilePath = videoFile.absolutePath
         return videoFile
     }
 
-    @SuppressLint("SimpleDateFormat")
+
     private fun createImageFileName(): String {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        return "IMAGE_${timestamp}.jpeg"
+        val timestamp = fileFormat.format(Date())
+        return "$photoFilePrefix${timestamp}.jpg"
     }
 
     private fun createImageFile(): File {
-        //currentVideoFilePath = imageFile.absolutePath
+        val photoFolder = Environment.DIRECTORY_PICTURES.toString()
         return File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory("$photoFolder${File.separator}$cueFolderName"),
             createImageFileName()
         )
     }
