@@ -258,6 +258,7 @@ class WebViewActivity : AppCompatActivity() {
                     cameraCaptureSession.capture(capReq.build(),null,null)
                     Toast.makeText(applicationContext, "Image is captured", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
+                    Log.e("Error", "Error occurred: ${e.localizedMessage}")
                     toastMessage("Error occurred: ${e.localizedMessage}")
                 }
             }
@@ -271,8 +272,6 @@ class WebViewActivity : AppCompatActivity() {
             cameraCaptureSession.close()
         if (this::cameraDevice.isInitialized)
             cameraDevice.close()
-//        if(!flashThread.isInterrupted)
-//            flashThread.interrupt()
 
     }
 
@@ -505,6 +504,7 @@ class WebViewActivity : AppCompatActivity() {
     }
 
     private fun createVideoFile(): File {
+        createVideoFolder()
         val videoFolder = Environment.DIRECTORY_MOVIES.toString()
         val videoFile = File(
             Environment.getExternalStoragePublicDirectory("$videoFolder${File.separator}$cueFolderName"),
@@ -517,15 +517,32 @@ class WebViewActivity : AppCompatActivity() {
 
     private fun createImageFileName(): String {
         val timestamp = fileFormat.format(Date())
-        return "$photoFilePrefix${timestamp}.jpg"
+        return "$photoFilePrefix${timestamp}.jpeg"
     }
 
     private fun createImageFile(): File {
+        val t = createImageFolder()
         val photoFolder = Environment.DIRECTORY_PICTURES.toString()
         return File(
             Environment.getExternalStoragePublicDirectory("$photoFolder${File.separator}$cueFolderName"),
             createImageFileName()
         )
+    }
+
+    private fun createImageFolder(): Boolean {
+        val photoFolder = Environment.DIRECTORY_PICTURES.toString()
+        return if(!Environment.getExternalStoragePublicDirectory("$photoFolder${File.separator}$cueFolderName").exists())
+            Environment.getExternalStoragePublicDirectory("$photoFolder${File.separator}$cueFolderName").mkdir()
+        else
+            true
+    }
+
+    private fun createVideoFolder(): Boolean {
+        val videoFolder = Environment.DIRECTORY_MOVIES.toString()
+        return if(!Environment.getExternalStoragePublicDirectory("$videoFolder${File.separator}$cueFolderName").exists())
+            Environment.getExternalStoragePublicDirectory("$videoFolder${File.separator}$cueFolderName").mkdir()
+        else
+            true
     }
 
     private fun <T> cameraCharacteristics(cameraId: String, key: CameraCharacteristics.Key<T>): T {
