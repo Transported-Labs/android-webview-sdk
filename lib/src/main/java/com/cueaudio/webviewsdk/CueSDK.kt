@@ -11,6 +11,7 @@ import android.hardware.camera2.CameraManager.TorchCallback
 import android.os.*
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.camera.core.CameraControl
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
@@ -25,8 +26,7 @@ object PermissionConstant {
     const val ASK_CAMERA_REQUEST = 1002
     const val ASK_SAVE_PHOTO_REQUEST = 1003
 }
-
-class CueSDK(private val mContext: Context, private val webView: WebView) {
+class CueSDK (private val mContext: Context, private val webView: WebView) {
 
     private val torchServiceName = "torch"
     private val vibrationServiceName = "vibration"
@@ -50,20 +50,18 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     private val hasCamMethodName = "hasCameraPermission"
     private val hasSavePhotoMethodName = "hasSavePhotoPermission"
     private val testErrorMethodName = "testError"
-    private val cameraSparkleMethod = "cameraSparkle"
+
     private var curRequestId: Int? = null
     private var isFlashlightOn = false
 
-    private val cameraManager: CameraManager =
-        mContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    private val cameraManager: CameraManager = mContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val torchCallback: TorchCallback = object : TorchCallback() {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
             super.onTorchModeChanged(cameraId, enabled)
             isFlashlightOn = enabled
         }
     }
-
-    private var flashThread: Thread = Thread()
+    var previewCameraControl: CameraControl? = null
 
     init {
         cameraManager.registerTorchCallback(torchCallback, null)
@@ -72,6 +70,7 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     /// Post message from the web page
     @JavascriptInterface
     fun postMessage(message: String) {
+        println("Received message from Javascript: $message")
         if (message != "") {
             val params = convertToParamsArray(message)
             processParams(params)
@@ -79,44 +78,61 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     }
 
     private fun turnTorchToLevel(level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
-        try {
-            val cameraId = cameraManager.cameraIdList[0]
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-                val supportedMaxLevel =
-                    characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
-                // Check if camera supports Torch Strength Control
-                if ((supportedMaxLevel != null) && (supportedMaxLevel > 1)) {
-                    val strengthLevel = (supportedMaxLevel * level).roundToInt()
-                    if (strengthLevel > 0) {
-                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
-                    }
-                    if (isJavaScriptCallbackNeeded) {
-                        sendToJavaScript(null)
+        //  Currently there is no way to control the strength while the CameraX is opened
+        val cameraControl = this.previewCameraControl
+        if (cameraControl != null) {
+            cameraControl.enableTorch(true)
+            if (isJavaScriptCallbackNeeded) {
+                sendToJavaScript(null)
+            }
+        } else {
+            try {
+                val cameraId = cameraManager.cameraIdList[0]
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                    val supportedMaxLevel =
+                        characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
+                    // Check if camera supports Torch Strength Control
+                    if ((supportedMaxLevel != null) && (supportedMaxLevel > 1)) {
+                        val strengthLevel = (supportedMaxLevel * level).roundToInt()
+                        if (strengthLevel > 0) {
+                            cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
+                        }
+                        if (isJavaScriptCallbackNeeded) {
+                            sendToJavaScript(null)
+                        }
+                    } else {
+                        //Simply turn torch on
+                        turnTorch(true, isJavaScriptCallbackNeeded)
                     }
                 } else {
                     //Simply turn torch on
                     turnTorch(true, isJavaScriptCallbackNeeded)
                 }
-            } else {
-                //Simply turn torch on
-                turnTorch(true, isJavaScriptCallbackNeeded)
+            } catch (e: CameraAccessException) {
+                errorToJavaScript("Method turnTorchToLevel - Camera access denied: " + e.localizedMessage)
             }
-        } catch (e: CameraAccessException){
-            errorToJavaScript("Method turnTorchToLevel - Camera access denied: " + e.localizedMessage)
         }
     }
 
-    // Using methods of camera2 API to turn torch on/off when front camera is active
+    // Using methods of CameraX/Camera2 API to turn torch on/off when front camera is active
     private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
-        try {
-            val cameraId = cameraManager.cameraIdList[0]
-            cameraManager.setTorchMode(cameraId, isOn)
+        val cameraControl = this.previewCameraControl
+        if (cameraControl != null) {
+            cameraControl.enableTorch(isOn)
             if (isJavaScriptCallbackNeeded) {
                 sendToJavaScript(null)
             }
-        } catch (e: CameraAccessException) {
-            errorToJavaScript("Method turnTorch - Camera access denied: " + e.localizedMessage)
+        } else {
+            try {
+                val cameraId = cameraManager.cameraIdList[0]
+                cameraManager.setTorchMode(cameraId, isOn)
+                if (isJavaScriptCallbackNeeded) {
+                    sendToJavaScript(null)
+                }
+            } catch (e: CameraAccessException) {
+                errorToJavaScript("Method turnTorch - Camera access denied")
+            }
         }
     }
 
@@ -134,59 +150,47 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     private fun nowMs(): Long {
         return Calendar.getInstance().timeInMillis
     }
-
-    private fun advancedSparkle(
-        rampUpMs: Int?,
-        sustainMs: Int?,
-        rampDownMs: Int?,
-        intensity: Double?
-    ) {
+    private fun advancedSparkle(rampUpMs: Int?, sustainMs: Int?, rampDownMs: Int?, intensity: Double?) {
         val blinkDelayMs: Long = 50
         if ((rampUpMs != null) && (sustainMs != null) && (rampDownMs != null) && (intensity != null)) {
-            if ((mContext as WebViewActivity).isCameraOn) {
-                mContext.advancedFlashTurn(rampUpMs + sustainMs + rampDownMs)
-            } else {
-                val totalDuration = rampUpMs + sustainMs + rampDownMs
-                val intenseLevel = adjustedIntenseLevel(intensity.toFloat())
-                val flashThread = Thread {
-                    try {
-                        val rampUpStart = nowMs()
-                        var currentRampUpTime: Long = 0
-                        while (currentRampUpTime < rampUpMs) {
-                            val upIntensity: Float =
-                                (currentRampUpTime.toFloat() / rampUpMs.toFloat()) * intenseLevel
-                            debugMessageToJS("rampUp: $upIntensity")
-                            turnTorchToLevel(adjustedIntenseLevel(upIntensity), false)
-                            Thread.sleep(blinkDelayMs)
-                            currentRampUpTime = nowMs() - rampUpStart
-                        }
-                        if (sustainMs > 0) {
-                            debugMessageToJS("sustain: $intenseLevel")
-                            turnTorchToLevel(adjustedIntenseLevel(intenseLevel), false)
-                            Thread.sleep(sustainMs.toLong())
-                        }
-                        val rampDownStart = nowMs()
-                        var currentRampDownTime: Long = 0
-                        while (currentRampDownTime < rampDownMs) {
-                            val downIntensity =
-                                (1.0 - currentRampDownTime.toFloat() / rampDownMs.toFloat()) * intenseLevel
-                            debugMessageToJS("rampDown: $downIntensity")
-                            turnTorchToLevel(adjustedIntenseLevel(downIntensity.toFloat()), false)
-                            Thread.sleep(blinkDelayMs)
-                            currentRampDownTime = nowMs() - rampDownStart
-                        }
-                    } catch (e: InterruptedException) {
-                        debugMessageToJS("interrupted by time: $totalDuration ms")
+            val totalDuration = rampUpMs + sustainMs + rampDownMs
+            val intenseLevel = adjustedIntenseLevel(intensity.toFloat())
+            val flashThread = Thread {
+                try {
+                    val rampUpStart = nowMs()
+                    var currentRampUpTime: Long = 0
+                    while (currentRampUpTime < rampUpMs) {
+                        val upIntensity: Float = (currentRampUpTime.toFloat() / rampUpMs.toFloat()) * intenseLevel
+                        debugMessageToJS("rampUp: $upIntensity")
+                        turnTorchToLevel(adjustedIntenseLevel(upIntensity), false)
+                        Thread.sleep(blinkDelayMs)
+                        currentRampUpTime = nowMs() - rampUpStart
                     }
-                    debugMessageToJS("turned off inside")
-                    turnTorch(false, false)
-                    sendToJavaScript(null)
+                    if (sustainMs > 0) {
+                        debugMessageToJS("sustain: $intenseLevel")
+                        turnTorchToLevel(adjustedIntenseLevel(intenseLevel), false)
+                        Thread.sleep(sustainMs.toLong())
+                    }
+                    val rampDownStart = nowMs()
+                    var currentRampDownTime: Long = 0
+                    while (currentRampDownTime < rampDownMs){
+                        val downIntensity = (1.0 - currentRampDownTime.toFloat() / rampDownMs.toFloat()) * intenseLevel
+                        debugMessageToJS("rampDown: $downIntensity")
+                        turnTorchToLevel(adjustedIntenseLevel(downIntensity.toFloat()), false)
+                        Thread.sleep(blinkDelayMs)
+                        currentRampDownTime = nowMs() - rampDownStart
+                    }
+                } catch (e: InterruptedException) {
+                    debugMessageToJS("interrupted by time: $totalDuration ms")
                 }
-                flashThread.start()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    flashThread.interrupt()
-                }, totalDuration.toLong())
+                debugMessageToJS("turned off inside")
+                turnTorch(false, false)
+                sendToJavaScript(null)
             }
+            flashThread.start()
+            Handler(Looper.getMainLooper()).postDelayed({
+                flashThread.interrupt()
+            }, totalDuration.toLong())
         } else {
             errorToJavaScript("Cannot be null rampUpMs: $rampUpMs, sustainMs: $sustainMs, rampDownMs: $rampDownMs, intensity: $intensity")
         }
@@ -194,10 +198,9 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
 
     private fun sparkle(duration: Int?) {
         if (duration != null) {
-            flashThread = Thread {
+            val flashThread = Thread {
                 var isOn = false
                 var isSparkling = true
-                //isSparklingOn = true
                 val blinkDelay: Long = 50
                 while (isSparkling) {
                     isOn = !isOn
@@ -207,7 +210,6 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                     } catch (e: InterruptedException) {
                         turnTorch(false, false)
                         isSparkling = false
-                        //      isSparklingOn = false
                     }
                 }
             }
@@ -261,18 +263,15 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
             errorToJavaScript("Duration: $duration is not valid value")
         }
     }
-
     private fun hasPermission(requestCode: Int) {
         var permissionType = ""
         when (requestCode) {
             PermissionConstant.ASK_CAMERA_REQUEST -> {
                 permissionType = Manifest.permission.CAMERA
             }
-
             PermissionConstant.ASK_MICROPHONE_REQUEST -> {
                 permissionType = Manifest.permission.RECORD_AUDIO
             }
-
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
                     // Not ask for permission for Android 11+
@@ -299,11 +298,9 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
             PermissionConstant.ASK_CAMERA_REQUEST -> {
                 permissionType = Manifest.permission.CAMERA
             }
-
             PermissionConstant.ASK_MICROPHONE_REQUEST -> {
                 permissionType = Manifest.permission.RECORD_AUDIO
             }
-
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
                     // Not ask for permission for Android 11+
@@ -364,11 +361,9 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                 val methodName = params[2] as? String
                 if ((serviceName != null) && (methodName != null)) {
                     if (serviceName == torchServiceName) {
-                        when (methodName) {
+                        when(methodName){
                             onMethodName -> {
-                                if ((mContext as WebViewActivity).isCameraOn) {
-                                    mContext.turnTorch(true)
-                                } else if (params.length() > 3) {
+                                if (params.length() > 3) {
                                     val level = params[3] as? Double
                                     if (level != null) {
                                         turnTorchToLevel(level.toFloat())
@@ -383,30 +378,13 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                                 } else {
                                     turnTorch(true)
                                 }
-
                             }
-
-                            offMethodName -> {
-                                if ((mContext as WebViewActivity).isCameraOn) {
-                                    mContext.turnTorch(false)
-                                } else {
-                                    turnTorch(false)
-                                }
-                            }
-
+                            offMethodName -> turnTorch(false)
                             checkIsOnMethodName -> checkIsTorchOn()
                             sparkleMethodName -> {
                                 val duration = params[3] as? Int
-                                if ((mContext as WebViewActivity).isCameraOn) {
-                                    if (!flashThread.isInterrupted) {
-                                        flashThread.interrupt()
-                                    }
-                                    (mContext as WebViewActivity).sparkle(duration)
-                                } else {
-                                    sparkle(duration)
-                                }
+                                sparkle(duration)
                             }
-
                             advancedSparkleMethodName -> {
                                 if (params.length() > 6) {
                                     val rampUpMs = params[3] as? Int
@@ -418,19 +396,18 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                                     errorToJavaScript("Needed more params for advancedSparkle: rampUpMs: Int, sustainMs: Int, rampDownMs: Int, intensity: Float")
                                 }
                             }
-
                             testErrorMethodName -> errorToJavaScript("This is the test error message")
                         }
                     } else if (serviceName == vibrationServiceName) {
                         when (methodName) {
-                            vibrateMethodName -> {
+                            vibrateMethodName ->  {
                                 val duration = params[3] as? Int
                                 makeVibration(duration)
                             }
                         }
-                    } else if (serviceName == storageServiceName) {
+                    }  else if (serviceName == storageServiceName) {
                         when (methodName) {
-                            saveMediaMethodName -> {
+                            saveMediaMethodName ->  {
                                 val data = params[3] as? String
                                 val filename = params[4] as? String
                                 saveMedia(data, filename)
@@ -438,60 +415,35 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
                         }
                     } else if (serviceName == permissionsServiceName) {
                         when (methodName) {
-                            askMicMethodName -> {
+                            askMicMethodName ->  {
                                 askForPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
                             }
-
-                            askCamMethodName -> {
+                            askCamMethodName ->  {
                                 askForPermission(PermissionConstant.ASK_CAMERA_REQUEST)
                             }
-
-                            askSavePhotoMethodName -> {
+                            askSavePhotoMethodName ->  {
                                 askForPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
                             }
-
-                            hasMicMethodName -> {
+                            hasMicMethodName ->  {
                                 hasPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
                             }
-
-                            hasCamMethodName -> {
+                            hasCamMethodName ->  {
                                 hasPermission(PermissionConstant.ASK_CAMERA_REQUEST)
                             }
-
-                            hasSavePhotoMethodName -> {
+                            hasSavePhotoMethodName ->  {
                                 hasPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
                             }
                         }
                     } else if (serviceName == cameraServiceName) {
                         when (methodName) {
-                            openCameraMethodName-> {
-
-                                (mContext as WebViewActivity).isCameraOn = true
-                                openCamera(methodName)
-                            }
-                            openPhotoCameraMethod-> {
-
-                                (mContext as WebViewActivity).isCameraOn = true
-                                openCamera(methodName)
-                            }
+                            openCameraMethodName,
+                            openPhotoCameraMethod,
                             openVideoCameraMethod-> {
-
-                                (mContext as WebViewActivity).isCameraOn = true
                                 openCamera(methodName)
-                            }
-
-                            cameraSparkleMethod -> {
-                                if ((mContext as WebViewActivity).isCameraOn) {
-                                    if (!flashThread.isInterrupted) {
-                                        flashThread.interrupt()
-                                        (mContext as WebViewActivity).sparkle(1000)
-                                    }
-                                } else
-                                    sparkle(1000)
                             }
                         }
-                    } else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName' are supported")
+                    }  else {
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName' are supported")
                     }
                 }
             } else {
@@ -501,11 +453,7 @@ class CueSDK(private val mContext: Context, private val webView: WebView) {
     }
 
     private fun openCamera(method : String) {
-//        val intent : Intent = Intent(mContext as WebViewActivity, CameraViewActivity::class.java)
-//        intent.putExtra("isSparklingOn", isSparklingOn)
-//        startActivity(mContext, intent, null)
         (mContext as WebViewActivity).startCamera(method)
-
     }
 
     private fun errorToJavaScript(errorMessage: String) {
