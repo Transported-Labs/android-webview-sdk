@@ -4,6 +4,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.media.MediaActionSound
+import android.media.MediaActionSound.SHUTTER_CLICK
+import android.media.MediaActionSound.START_VIDEO_RECORDING
+import android.media.MediaActionSound.STOP_VIDEO_RECORDING
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -16,7 +20,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Camera
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
@@ -28,14 +31,20 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
-import java.lang.Exception
+import androidx.core.view.updateLayoutParams
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+enum class CameraLayoutType {
+    BOTH,
+    PHOTO_ONLY,
+    VIDEO_ONLY
+}
 
 class WebViewActivity : AppCompatActivity() {
     companion object {
@@ -55,9 +64,6 @@ class WebViewActivity : AppCompatActivity() {
             }.toTypedArray()
     }
     private val cueSDKName = "cueSDK"
-    private val openCameraMethodName = "openCamera"
-    private val openPhotoCameraMethod = "openPhotoCamera"
-    private val openVideoCameraMethod = "openVideoCamera"
     private lateinit var webViewLayout: View
     private lateinit var exitButton: ImageButton
     private lateinit var webView: WebView
@@ -67,6 +73,7 @@ class WebViewActivity : AppCompatActivity() {
     private lateinit var videoButton: ImageButton
     private lateinit var imageButton: ImageButton
 
+    private var curCameraLayoutType = CameraLayoutType.BOTH
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
@@ -201,6 +208,7 @@ class WebViewActivity : AppCompatActivity() {
                 override fun
                         onImageSaved(output: ImageCapture.OutputFileResults){
                     val msg = "Photo capture succeeded: ${output.savedUri}"
+                    playSound(SHUTTER_CLICK)
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
                     Log.d(TAG, msg)
                 }
@@ -250,10 +258,12 @@ class WebViewActivity : AppCompatActivity() {
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
+                        playSound(START_VIDEO_RECORDING)
                         videoButton.apply {
-                            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.record_stop_s))
+                            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_record_video_active))
                             isEnabled = true
                         }
+                        adjustButtonsVisibility(true)
                     }
                     is VideoRecordEvent.Finalize -> {
                         if (!recordEvent.hasError()) {
@@ -268,14 +278,29 @@ class WebViewActivity : AppCompatActivity() {
                             Log.e(TAG, "Video capture ends with error: " +
                                     "${recordEvent.error}")
                         }
+                        playSound(STOP_VIDEO_RECORDING)
                         videoButton.apply {
-                            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.record_start_s))
+                            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_record_video_inactive))
                             isEnabled = true
                         }
+                        adjustButtonsVisibility(false)
                     }
                 }
             }
     }
+
+    fun playSound(soundType: Int) {
+        val sound = MediaActionSound()
+        sound.play(soundType)
+    }
+
+    private fun adjustButtonsVisibility(isRecording: Boolean) {
+        if (curCameraLayoutType == CameraLayoutType.BOTH) {
+            imageButton.visibility = if (isRecording) View.GONE else View.VISIBLE
+        }
+        closeButton.visibility = if (isRecording) View.GONE else View.VISIBLE
+    }
+
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
             baseContext, it) == PackageManager.PERMISSION_GRANTED
@@ -319,7 +344,7 @@ class WebViewActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
                 val camera = cameraProvider.bindToLifecycle(
                     this, cameraSelector, preview, imageCapture, videoCapture)
-                camera?.apply {
+                camera.apply {
                     if (cameraInfo.hasFlashUnit()) {
                         // Set up cameraControl to use flash during preview
                         cueSDK.previewCameraControl = cameraControl
@@ -332,25 +357,32 @@ class WebViewActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    fun startCamera(cameraMethod : String) {
+    fun startCamera(cameraLayoutType : CameraLayoutType) {
+        curCameraLayoutType = cameraLayoutType
         if ((imageCapture == null) || (videoCapture == null)) {
             initCamera()
         }
         runOnUiThread {
             webViewLayout.visibility = View.GONE
             cameraLayout.visibility = View.VISIBLE
-            when(cameraMethod){
-                openCameraMethodName ->{
+            when(curCameraLayoutType){
+                CameraLayoutType.BOTH ->{
                     videoButton.visibility = View.VISIBLE
                     imageButton.visibility = View.VISIBLE
+                    imageButton.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                        endToEnd = ConstraintLayout.LayoutParams.UNSET
+                    }
                 }
-                openVideoCameraMethod ->{
+                CameraLayoutType.VIDEO_ONLY ->{
                     videoButton.visibility = View.VISIBLE
                     imageButton.visibility = View.GONE
                 }
-                openPhotoCameraMethod ->{
+                CameraLayoutType.PHOTO_ONLY ->{
                     videoButton.visibility = View.GONE
                     imageButton.visibility = View.VISIBLE
+                    imageButton.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                        endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                    }
                 }
             }
         }

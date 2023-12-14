@@ -436,10 +436,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                         }
                     } else if (serviceName == cameraServiceName) {
                         when (methodName) {
-                            openCameraMethodName,
-                            openPhotoCameraMethod,
-                            openVideoCameraMethod-> {
-                                openCamera(methodName)
+                            openCameraMethodName ->  {
+                                openCamera(CameraLayoutType.BOTH)
+                            }
+                            openPhotoCameraMethod ->  {
+                                openCamera(CameraLayoutType.PHOTO_ONLY)
+                            }
+                            openVideoCameraMethod ->  {
+                                openCamera(CameraLayoutType.VIDEO_ONLY)
                             }
                         }
                     }  else {
@@ -452,8 +456,8 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         }
     }
 
-    private fun openCamera(method : String) {
-        (mContext as WebViewActivity).startCamera(method)
+    private fun openCamera(cameraLayoutType : CameraLayoutType) {
+        (mContext as WebViewActivity).startCamera(cameraLayoutType)
     }
 
     private fun errorToJavaScript(errorMessage: String) {
