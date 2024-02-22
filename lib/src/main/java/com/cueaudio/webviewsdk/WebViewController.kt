@@ -11,13 +11,14 @@ class InvalidUrlError(message: String): Exception(message)
 
 class WebViewController(private val mContext: Context) {
     private val chromeAppID = "com.android.chrome"
-
+    var isExitButtonHidden = false
     ///Checks validity of passed URL, starts new activity, navigates to the url in embedded WebView-object
     @Throws(InvalidUrlError::class)
     fun navigateTo(url: String) {
         if (URLUtil.isValidUrl(url)) {
             val intent = Intent(mContext, WebViewActivity::class.java)
             intent.putExtra("url", url)
+            intent.putExtra("isExitButtonHidden", isExitButtonHidden)
             mContext.startActivity(intent)
         } else {
             throw InvalidUrlError("Invalid URL: '$url'")

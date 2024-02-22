@@ -156,7 +156,8 @@ class WebViewActivity : AppCompatActivity() {
         if (url != null) {
             webView.loadUrl(url)
         }
-
+        val isExitButtonHidden = intent.getBooleanExtra("isExitButtonHidden", false)
+        exitButton.visibility = if (isExitButtonHidden) View.GONE else View.VISIBLE
         exitButton.setOnClickListener {
             webView.loadUrl("about:blank")
             finish()
