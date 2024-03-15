@@ -1,32 +1,76 @@
 # CueLightShow for Android
 
-Framework contains SDK to use camera torch from page loaded to Android WebView. It's usage is demonstrated in [demo project](https://github.com/Transported-Labs/android-webview-sdk-demo).
+This framework contains SDK for CUE Live Lightshow 2.0.
 
 ## Usage
-1. Clone both _android-webview-sdk_ and _android-webview-sdk-demo_ in the same directory:
-```
-    android-webview-sdk
-    android-webview-sdk-demo
-```
-2. Open Terminal in location of _android-webview-sdk_ and run the following command to build library:
-```
-./gradlew assemble
-```
-3. Open demo-project from _android-webview-sdk-demo_ in Android Studio 2022.1.1+:
-4. Check **build.gradle (Module :app)** file. It's dependencies section should contain the line
+1.Add the JitPack repository to your **settings.gradle** file
 ```kotlin
-    implementation files('../../android-webview-sdk/lib/build/outputs/aar/lib-debug.aar')
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
 ```
-4. Build and run demo-project _android-webview-sdk-demo_ in Android Studio.
+2.Add the dependency to **build.gradle (Module:app)**. Set up actual android-webview-sdk [version](https://github.com/Transported-Labs/android-webview-sdk/tags) 
+```kotlin
+dependencies {
+    implementation 'com.github.Transported-Labs:android-webview-sdk:0.0.6'
+}
+```
+## Integration
 
-## Troubleshooting
-Building of the library may be failed due to the custom location of the Android SDK. May appear error message:
-```
-Could not determine the dependencies of task ':lib:compileDebugAidl'.
-Several environment variables and/or system properties contain different paths to the SDK.
-Please correct and use only one way to inject the SDK location.
-```
-In this case open file **local.properties** and set up the correct location of the Android SDK to _sdk.dir_ param.
+Simply execute the following code:
 
-## Sample of HTML-file
-Please find the sample HTML-file in assets of the demo project: [index.html](https://github.com/Transported-Labs/android-webview-sdk-demo/blob/main/app/src/main/assets/index.html)
+```kotlin
+        navigateButton.setOnClickListener {
+            val url = "<your URL from CUE>"
+            try {
+                webViewController.navigateTo(url)
+            } catch (e: InvalidUrlError) {
+                // Show invalid URL error message
+                Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+```
+## Pre-fetch
+
+To pre-fetch lightshow resources is very similar to navigation, but we should keep sdkController hidden and add to URL preload parameter.
+Just execute the following code:
+
+```kotlin
+        prefetchButton.setOnClickListener {
+            val urlString = "<your URL from CUE>"
+            val url = "${urlString}&preload=true"
+            try {
+                webViewController.prefetch(url) {
+                    // You can get progress from 0 to 100 during the pre-fetch process
+                    prefetchButton.text = "Fetched:$it%"
+                }
+            } catch (e: InvalidUrlError) {
+                // Show invalid URL error message
+                Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+```
+
+## Using PRIVACY flag
+
+You can pass optional PRIVACY flag to prevent collecting and sending to the server any user information. SDK initialization in this case looks like that:
+
+[insert code example] 
+
+## CLIENT_URL_STRING
+
+We do not recommend hard-coding a URL string, as it varies by client. The branding is controlled dynamically. In order to pre-fetch this branding so it shows as soon as the CUE SDK is opened, please execute this code once your app launches:
+
+[INSERT INSTRUCTIONS ON HOW TO DO THIS, SIMILAR TO THIS FROM 1.0: https://github.com/CUEAudio/sdk_demo_ios?tab=readme-ov-file#api-key]
+
+## HOW TO TEST
+
+In order to test, you can play an audio file to trigger a light show with the CUE SDK open. The audio file is specific to the CLIENT_URL_STRING. In order to get the right audio file for your CLIENT_URL_STRING, simply:
+
+[insert instructions on how someone can download the demo audio file based on your client URL string]
+
+
