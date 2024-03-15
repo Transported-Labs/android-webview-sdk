@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace 'com.cueaudio.webviewsdk'
+    namespace 'com.cueaudio.cuelightshow'
     compileSdk 33
 
     defaultConfig {
@@ -62,7 +62,7 @@ publishing {
     publications {
         release(MavenPublication) {
             groupId = 'com.cueaudio'
-            artifactId = 'webviewsdk'
+            artifactId = 'cuelightshow'
             version = '1.0'
             afterEvaluate {
                 from components.release
@@ -70,7 +70,7 @@ publishing {
         }
         debug(MavenPublication) {
             groupId = 'com.cueaudio'
-            artifactId = 'webviewsdk'
+            artifactId = 'cuelightshow'
             version = '1.0'
             afterEvaluate {
                 from components.debug

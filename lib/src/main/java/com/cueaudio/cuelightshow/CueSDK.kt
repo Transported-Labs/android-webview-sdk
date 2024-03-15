@@ -1,4 +1,4 @@
-package com.cueaudio.webviewsdk
+package com.cueaudio.cuelightshow
 
 import android.Manifest
 import android.app.Activity

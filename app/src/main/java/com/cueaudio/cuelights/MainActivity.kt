@@ -3,8 +3,8 @@ package com.cueaudio.cuelights
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
-import com.cueaudio.webviewsdk.InvalidUrlError
-import com.cueaudio.webviewsdk.WebViewController
+import com.cueaudio.cuelightshow.InvalidUrlError
+import com.cueaudio.cuelightshow.WebViewController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

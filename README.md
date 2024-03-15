@@ -1,4 +1,4 @@
-# WebViewSDK for Android
+# CueLightShow for Android
 
 Framework contains SDK to use camera torch from page loaded to Android WebView. It's usage is demonstrated in [demo project](https://github.com/Transported-Labs/android-webview-sdk-demo).
 

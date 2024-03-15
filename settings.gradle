@@ -12,6 +12,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "WebViewSDK"
+rootProject.name = "CueLightShow"
 include ':lib'
 include ':app'
