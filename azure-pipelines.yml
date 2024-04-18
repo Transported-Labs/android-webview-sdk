@@ -126,6 +126,8 @@ stages:
               ls -lFht
               ./gradlew assemble
               ls -lFht ./lib/build/outputs/**
+              echo === ls -lFht ./lib/build/outputs/** ===
+              ls -lFht ./app/build/outputs/**
             displayName: Build aar
 
           - script: |
@@ -152,6 +154,20 @@ stages:
               archiveType: zip
               archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
               replaceExistingArchive: true
+
+          # - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
+          #   artifact: drop
+          #   condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+          - task: ArchiveFiles@2
+            displayName: 'add Archive apk'
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+            inputs:
+              rootFolderOrFile: $(System.DefaultWorkingDirectory)/app/build/outputs/apk/debug
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
+              replaceExistingArchive: false
 
           - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)_${{ variables.tplProjectName }}.zip
             artifact: drop
