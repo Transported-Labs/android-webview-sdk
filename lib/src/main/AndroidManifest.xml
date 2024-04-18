@@ -16,17 +16,7 @@
                 "android.support.customtabs.action.CustomTabsService" />
         </intent>
     </queries>
-    <application
-        android:requestLegacyExternalStorage="true"
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.CueLightShow"
-        tools:targetApi="31">
+    <application>
         <activity
             android:name=".WebViewActivity"
             android:screenOrientation="portrait"
