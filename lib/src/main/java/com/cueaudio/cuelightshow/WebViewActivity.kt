@@ -40,6 +40,7 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+
 enum class CameraLayoutType {
     BOTH,
     PHOTO_ONLY,
@@ -80,8 +81,6 @@ class WebViewActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
 
     private lateinit var cueSDK: CueSDK
-    private val userAgentString =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,56 +96,6 @@ class WebViewActivity : AppCompatActivity() {
         closeButton = findViewById(R.id.closeButton)
         videoButton = findViewById(R.id.videoButton)
         imageButton = findViewById(R.id.imageButton)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.mediaPlaybackRequiresUserGesture = false
-        webView.settings.userAgentString = userAgentString
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-            }
-
-            override fun onReceivedHttpError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                errorResponse: WebResourceResponse?
-            ) {
-                super.onReceivedHttpError(view, request, errorResponse)
-                if (errorResponse != null) {
-                    toastMessage(errorResponse.reasonPhrase)
-                }
-            }
-
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                super.onReceivedError(view, request, error)
-
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun onReceivedError(
-                view: WebView?,
-                errorCode: Int,
-                description: String?,
-                failingUrl: String?
-            ) {
-                if (description != null) {
-                    toastMessage(description.toString())
-                }
-            }
-        }
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onPermissionRequest(request: PermissionRequest) {
-                runOnUiThread {
-                    request.grant(request.resources)
-                }
-            }
-
-
-        }
 
         cameraLayout.visibility = View.GONE
         cueSDK = CueSDK(this, webView)
@@ -154,7 +103,8 @@ class WebViewActivity : AppCompatActivity() {
 
         val url = intent.getStringExtra("url")
         if (url != null) {
-            webView.loadUrl(url)
+            val webViewLink = WebViewLink(this, webView)
+            webViewLink.navigateTo(url, addToLog)
         }
         val isExitButtonHidden = intent.getBooleanExtra("isExitButtonHidden", false)
         exitButton.visibility = if (isExitButtonHidden) View.GONE else View.VISIBLE
@@ -172,6 +122,11 @@ class WebViewActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
         videoButton.setOnClickListener { captureVideo() }
         imageButton.setOnClickListener { takePhoto() }
+    }
+
+    private val addToLog: LogHandler = { logLine ->
+        // Use global log handler
+        IoUtils.logHandler?.let { it(logLine) }
     }
 
     private fun takePhoto() {
@@ -314,7 +269,8 @@ class WebViewActivity : AppCompatActivity() {
 
     private fun initCamera() {
         if (!allPermissionsGranted()) {
-            toastMessage("Please set up Microphone and Camera permissions")
+            Toast.makeText(baseContext, "Please set up Microphone and Camera permissions", Toast.LENGTH_SHORT)
+                .show()
             return
         }
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -410,10 +366,6 @@ class WebViewActivity : AppCompatActivity() {
                 cueSDK.callCurPermissionRequestGranted(granted)
             }
         }
-    }
-
-    private fun toastMessage(message: String) {
-        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 }
 
