@@ -64,7 +64,7 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
             override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
                 super.onReceivedHttpError(view, request, errorResponse)
                 if (errorResponse != null) {
-                    toastMessage(errorResponse.reasonPhrase)
+                    println("Received Http Error: ${errorResponse.reasonPhrase}")
                 }
             }
 

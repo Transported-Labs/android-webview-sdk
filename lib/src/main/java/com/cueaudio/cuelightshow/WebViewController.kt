@@ -7,8 +7,15 @@ import android.net.Uri
 import android.webkit.URLUtil
 import android.webkit.WebView
 import androidx.browser.customtabs.CustomTabsIntent
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReadWriteLock
 
 class InvalidUrlError(message: String): Exception(message)
+
+///Helper singleton object to pass the lambda handler to activity
+object LogHandlerHolder {
+    var logHandler: LogHandler? = null
+}
 
 class WebViewController(private val context: Context) {
     var isExitButtonHidden = false
@@ -20,8 +27,8 @@ class WebViewController(private val context: Context) {
             val intent = Intent(context, WebViewActivity::class.java)
             intent.putExtra("url", url)
             intent.putExtra("isExitButtonHidden", isExitButtonHidden)
-            // Set up global log handler
-            IoUtils.logHandler = logHandler
+            // Set up global log handler to pass it to activity
+            LogHandlerHolder.logHandler = logHandler
             context.startActivity(intent)
         } else {
             throw InvalidUrlError("Invalid URL: '$url'")

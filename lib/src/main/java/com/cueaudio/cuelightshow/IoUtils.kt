@@ -22,7 +22,6 @@ object IoUtils {
     private const val DATA_BUFFER = 1024
     private const val REGEX_ALLOWED_LETTERS = "[^0-9a-zA-Z.\\-]"
     private val sLocks: MutableMap<String, ReadWriteLock> = ConcurrentHashMap(0)
-    var logHandler: LogHandler? = null
 
     @JvmStatic
     fun close(closeable: Closeable?) {

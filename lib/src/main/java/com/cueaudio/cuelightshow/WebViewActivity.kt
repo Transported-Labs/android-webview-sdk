@@ -126,7 +126,7 @@ class WebViewActivity : AppCompatActivity() {
 
     private val addToLog: LogHandler = { logLine ->
         // Use global log handler
-        IoUtils.logHandler?.let { it(logLine) }
+        LogHandlerHolder.logHandler?.let { it(logLine) }
     }
 
     private fun takePhoto() {
