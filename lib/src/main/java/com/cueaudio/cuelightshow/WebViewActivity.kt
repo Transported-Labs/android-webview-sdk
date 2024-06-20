@@ -54,6 +54,7 @@ class WebViewActivity : AppCompatActivity() {
         private const val PHOTO_FILE_PREFIX = "cue-"
         private const val VIDEO_FILE_PREFIX = "video-"
         private const val CUE_FOLDER_NAME = "CUE Live"
+        private const val MAXIMUM_LEVEL = 1f
         private val REQUIRED_PERMISSIONS =
             mutableListOf (
                 Manifest.permission.CAMERA,
@@ -122,11 +123,16 @@ class WebViewActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
         videoButton.setOnClickListener { captureVideo() }
         imageButton.setOnClickListener { takePhoto() }
+        setScreenBrightness(MAXIMUM_LEVEL)
     }
 
     private val addToLog: LogHandler = { logLine ->
         // Use global log handler
         LogHandlerHolder.logHandler?.let { it(logLine) }
+    }
+
+    private fun setScreenBrightness(x: Float) = window?.apply {
+        attributes = attributes?.apply { screenBrightness = x }
     }
 
     private fun takePhoto() {

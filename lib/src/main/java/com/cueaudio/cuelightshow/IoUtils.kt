@@ -152,8 +152,8 @@ object IoUtils {
         val cacheDir = File(context.filesDir, CACHE_DIR)
         if (cacheDir.exists()) {
             for (file in cacheDir.listFiles()!!) {
+                val fileName = file.name
                 try {
-                    val fileName = file.name
                     file.delete()
                     resultMessage += "Deleted: ${shorten(fileName)}\n"
                 } catch (e: Exception) {
