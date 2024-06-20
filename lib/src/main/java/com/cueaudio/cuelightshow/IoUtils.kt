@@ -135,7 +135,7 @@ object IoUtils {
     }
 
     fun showCache(context: Context): String {
-        var resultMessage = "Cache contains the files:\n"
+        var resultMessage = ""
         val cacheDir = File(context.filesDir, CACHE_DIR)
         var index = 0
         if (cacheDir.exists()) {
@@ -148,18 +148,19 @@ object IoUtils {
     }
 
     fun clearCache(context: Context): String {
-        var resultMessage = "Cache is started to be cleared\n"
+        var resultMessage = ""
         val cacheDir = File(context.filesDir, CACHE_DIR)
         if (cacheDir.exists()) {
             for (file in cacheDir.listFiles()!!) {
                 try {
+                    val fileName = file.name
                     file.delete()
+                    resultMessage += "Deleted: ${shorten(fileName)}\n"
                 } catch (e: Exception) {
                     resultMessage += "Error deleting file: ${shorten(file.name)}\n"
                 }
             }
         }
-        resultMessage += "Cache is finished to be cleared"
         return resultMessage
     }
 }
