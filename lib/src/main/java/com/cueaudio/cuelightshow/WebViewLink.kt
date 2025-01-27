@@ -1,10 +1,7 @@
 package com.cueaudio.cuelightshow
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
-import android.webkit.PermissionRequest
-import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -88,14 +85,6 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
                     }
                 }
                 return super.shouldInterceptRequest(view, request)
-            }
-        }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onPermissionRequest(request: PermissionRequest) {
-                (context as Activity).runOnUiThread {
-                    request.grant(request.resources)
-                }
             }
         }
     }
