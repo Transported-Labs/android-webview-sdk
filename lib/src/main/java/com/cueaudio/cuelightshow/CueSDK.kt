@@ -43,6 +43,8 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val sparkleMethodName = "sparkle"
     private val advancedSparkleMethodName = "advancedSparkle"
     private val saveMediaMethodName = "saveMedia"
+    private val saveCacheFileName = "saveCacheFile"
+    private val getCacheFileName = "getCacheFile"
     private val askMicMethodName = "getMicPermission"
     private val askCamMethodName = "getCameraPermission"
     private val askSavePhotoMethodName = "getSavePhotoPermission"
@@ -240,10 +242,42 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                     e.localizedMessage?.let { errorToJavaScript(it) }
                 }
             } else {
-                errorToJavaScript("Filename: $filename is not valid value")
+                errorToJavaScript("Filename is null")
             }
         } else {
-            errorToJavaScript("Data: $data is not valid value")
+            errorToJavaScript("Data are null")
+        }
+    }
+    private fun saveCacheFile(filename: String?, data: String?) {
+        if (data != null) {
+            if (filename != null) {
+                val logMessage = IoUtils.saveMediaToCacheFile(mContext, filename, data)
+                println(logMessage)
+                if (logMessage.contains("Error")) {
+                    errorToJavaScript("$logMessage, file: $filename")
+                } else {
+                    sendToJavaScript(null)
+                }
+            } else {
+                errorToJavaScript("Filename is null")
+            }
+        } else {
+            errorToJavaScript("Data are null")
+        }
+    }
+
+    private fun sendCacheFileToJavascript(filename: String?) {
+        if (filename != null) {
+            val (inputStream, logMessage) = IoUtils.loadMediaFromCacheFile(mContext, filename)
+            println(logMessage)
+            if (inputStream != null) {
+                val inputAsString = inputStream.bufferedReader().use { it.readText() }  // defaults to UTF-8
+                sendToJavaScript(inputAsString)
+            } else {
+                errorToJavaScript("Error with file $filename: $logMessage")
+            }
+        } else {
+            errorToJavaScript("Filename is null")
         }
     }
 
@@ -411,6 +445,15 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 val data = params[3] as? String
                                 val filename = params[4] as? String
                                 saveMedia(data, filename)
+                            }
+                            saveCacheFileName ->  {
+                                val filename = params[3] as? String
+                                val data = params[4] as? String
+                                saveCacheFile(filename, data)
+                            }
+                            getCacheFileName ->  {
+                                val filename = params[3] as? String
+                                sendCacheFileToJavascript(filename)
                             }
                         }
                     } else if (serviceName == permissionsServiceName) {

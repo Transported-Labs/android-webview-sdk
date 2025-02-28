@@ -80,6 +80,7 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
                             } else {
                                 val logMessage = "Loaded NOT from cache, from url: $urlString"
                                 addToLog(logMessage)
+                                saveToCache(urlString)
                             }
                         }
                     }

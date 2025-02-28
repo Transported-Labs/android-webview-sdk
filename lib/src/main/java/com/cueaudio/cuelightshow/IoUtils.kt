@@ -34,15 +34,26 @@ object IoUtils {
     }
 
     fun downloadToFile(context: Context, url: String): String {
-        var resultMessage: String
         val fileName = makeFileNameFromUrl(context, url)
+        BufferedInputStream(URL(url).openStream().use { inputStream ->
+            return saveMediaToFile(fileName, inputStream)
+        })
+    }
+
+    fun saveMediaToCacheFile(context: Context, filename: String, data: String): String {
+        val fullFileName = makeCacheFileName(context, filename)
+        return saveMediaToFile(fullFileName, data.byteInputStream())
+    }
+
+    private fun saveMediaToFile(fileName: String, inputStream: InputStream): String {
+        var resultMessage: String
         val outFile = File(fileName)
         if (outFile.exists()) {
             resultMessage = "Overwritten in cache"
             try {
                 outFile.delete()
             } catch (e: Exception) {
-                resultMessage = "Not overwritten, failed to delete file"
+                resultMessage = "Error, not overwritten in cache, failed to delete file: ${e.localizedMessage}"
             }
         } else {
             resultMessage = "Added to cache"
@@ -51,16 +62,14 @@ object IoUtils {
         val lock = getLock(outFile)
         try {
             lock!!.writeLock().lock()
-            BufferedInputStream(URL(url).openStream()).use { bufferedInputStream ->
-                outStream = FileOutputStream(outFile)
-                val data = ByteArray(DATA_BUFFER)
-                var count: Int
-                while (bufferedInputStream.read(data, 0, DATA_BUFFER).also { count = it } != -1) {
-                    outStream?.write(data, 0, count)
-                }
+            outStream = FileOutputStream(outFile)
+            val data = ByteArray(DATA_BUFFER)
+            var count: Int
+            while (inputStream.read(data, 0, DATA_BUFFER).also { count = it } != -1) {
+                outStream.write(data, 0, count)
             }
         } catch (e: Exception) {
-            resultMessage = "Failed to save in cache"
+            resultMessage = "Error, failed to save in cache: ${e.localizedMessage}"
         } finally {
             close(outStream)
             // release lock
@@ -70,10 +79,9 @@ object IoUtils {
         return "$resultMessage: ${shorten(fileName)}"
     }
 
-    fun loadMediaFromFileUrl(context: Context, url: String): Pair<InputStream?, String> {
+    private fun loadMediaFromFile(fileName: String): Pair<InputStream?, String> {
         var fileInputStream: FileInputStream? = null
         var resultMessage: String
-        val fileName = makeFileNameFromUrl(context, url)
         try {
             val file = File(fileName)
             if (!file.exists()) {
@@ -83,9 +91,18 @@ object IoUtils {
                 resultMessage = "Loaded from cache"
             }
         } catch (e: java.lang.Exception) {
-            resultMessage = "Failed to load file"
+            resultMessage = "Failed to load file: ${e.localizedMessage}"
         }
-        return  Pair(fileInputStream, "$resultMessage: ${shorten(fileName)}")
+        return Pair(fileInputStream, "$resultMessage: ${shorten(fileName)}")
+    }
+
+    fun loadMediaFromFileUrl(context: Context, url: String): Pair<InputStream?, String> {
+        val fileName = makeFileNameFromUrl(context, url)
+        return loadMediaFromFile(fileName)
+    }
+    fun loadMediaFromCacheFile(context: Context, filename: String): Pair<InputStream?, String> {
+        val fullFileName = makeCacheFileName(context, filename)
+        return loadMediaFromFile(fullFileName)
     }
 
     private fun shorten(fileName: String) = fileName.substringAfterLast("_")
@@ -118,6 +135,9 @@ object IoUtils {
         ).lowercase(
             Locale.getDefault()
         )
+        return makeCacheFileName(context, filename)
+    }
+    private fun makeCacheFileName(context: Context, filename: String): String {
         val cacheDir = File(context.filesDir, CACHE_DIR)
         if (!cacheDir.exists()) {
             cacheDir.mkdir()
