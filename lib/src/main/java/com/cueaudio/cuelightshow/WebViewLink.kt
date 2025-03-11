@@ -10,6 +10,8 @@ import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONException
 import java.net.URL
 
 enum class ContentLoadType {
@@ -23,6 +25,8 @@ typealias LogHandler = (String) -> Unit
 class WebViewLink (private val context: Context, private val webView: WebView) {
     private lateinit var mainOrigin: String
     private var cachePattern = ".com/files/"
+    private var indexFileName = "index.json"
+    private var gameAssetsPath = "games/light-show"
     private var contentLoadType = ContentLoadType.NONE
     private var logHandler: LogHandler? = null
 
@@ -43,7 +47,14 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
         adjustOriginParams(url)
         this.logHandler = logHandler
         addToLog("*** Started new PREFETCH process ***")
+        val urlObj = URL(url)
+        val platformIndexUrl = "${urlObj.protocol}://${urlObj.host}/$indexFileName"
+        val gameIndexUrl = "${urlObj.protocol}://${urlObj.host}/$gameAssetsPath/$indexFileName"
+        makeCacheForIndex(platformIndexUrl)
+        makeCacheForIndex(gameIndexUrl)
         webView.loadUrl(url)
+//        makeCacheByList()
+
     }
 
     private fun adjustOriginParams(url: String) {
@@ -67,21 +78,19 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val urlString = request.url.toString()
-                if (urlString.contains(cachePattern)) {
-                    when (contentLoadType) {
-                        ContentLoadType.NONE ->  {}
-                        ContentLoadType.PREFETCH ->  {
-                            saveToCache(urlString)
-                        }
-                        ContentLoadType.NAVIGATE ->  {
-                            val webResourceResponse = loadFromCache(urlString)
-                            if (webResourceResponse != null) {
-                                return webResourceResponse
-                            } else {
-                                val logMessage = "Loaded NOT from cache, from url: $urlString"
-                                addToLog(logMessage)
-                                saveToCache(urlString)
-                            }
+                when (contentLoadType) {
+                    ContentLoadType.NONE ->  {}
+                    ContentLoadType.PREFETCH ->  {
+                        saveToCacheFromWebView(urlString)
+                    }
+                    ContentLoadType.NAVIGATE ->  {
+                        val webResourceResponse = loadFromCache(urlString)
+                        if (webResourceResponse != null) {
+                            return webResourceResponse
+                        } else {
+                            val logMessage = "Loaded NOT from cache, from url: $urlString"
+                            addToLog(logMessage)
+                            saveToCacheFromWebView(urlString)
                         }
                     }
                 }
@@ -107,6 +116,12 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
         return null
     }
 
+    private fun saveToCacheFromWebView(url: String) {
+        if (url.contains(cachePattern)) {
+            saveToCache(url)
+        }
+    }
+
     private fun saveToCache(url: String) {
         CoroutineScope(Dispatchers.IO).launch {
             val logMessage = IoUtils.downloadToFile(context, url)
@@ -117,5 +132,57 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
     private fun addToLog(logMessage: String) {
         logHandler?.let { it(logMessage) }
         println("Files log: $logMessage")
+    }
+
+    private fun makeCacheByList() {
+        val jsonList = loadJsonDataFromAsset("local.json")
+        if (jsonList != null) {
+            val linkArray = convertToArray(jsonList)
+            if (linkArray != null) {
+                for (i in 0 until linkArray.length()) {
+                    val url = linkArray[i] as String
+                    saveToCache(url)
+                }
+            }
+        }
+    }
+    private fun makeCacheForIndex(indexUrl: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val jsonList = URL(indexUrl).readText()
+                if (jsonList != null) {
+                    val linkArray = convertToArray(jsonList)
+                    if (linkArray != null) {
+                        val pathToIndex = indexUrl.substringBeforeLast("/")
+                        for (i in 0 until linkArray.length()) {
+                            val relativeUrl = linkArray[i] as String
+                            val absoluteUrl = "$pathToIndex/$relativeUrl"
+                            saveToCache(absoluteUrl)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                addToLog("Error loading index: ${e.localizedMessage}")
+            }
+        }
+    }
+    private fun loadJsonDataFromAsset(fileName: String): String? {
+        val jsonString: String
+        try {
+            jsonString = context.assets.open(fileName).bufferedReader().use { it.readText() }
+        } catch (ioException: java.io.IOException) {
+            addToLog("Error of loading file $fileName: ${ioException.localizedMessage}")
+            return null
+        }
+        return jsonString
+    }
+
+    private fun convertToArray(source: String): JSONArray? {
+        return try {
+            JSONArray(source)
+        } catch (e: JSONException) {
+            addToLog("Error of converting: ${e.localizedMessage}")
+            null
+        }
     }
 }

@@ -59,7 +59,8 @@ class WebViewActivity : AppCompatActivity() {
         private const val VIDEO_FILE_PREFIX = "video-"
         private const val CUE_FOLDER_NAME = "CUE Live"
         private const val MAXIMUM_LEVEL = 1f
-        public const val FILE_CHOOSER_REQUEST_CODE = 1111
+        const val FILE_CHOOSER_REQUEST_CODE = 1111
+        const val CUE_SDK_NAME = "cueSDK"
         private val REQUIRED_PERMISSIONS =
             mutableListOf (
                 Manifest.permission.CAMERA,
@@ -70,7 +71,6 @@ class WebViewActivity : AppCompatActivity() {
                 }
             }.toTypedArray()
     }
-    private val cueSDKName = "cueSDK"
     private lateinit var webViewLayout: View
     private lateinit var exitButton: ImageButton
     private lateinit var webView: WebView
@@ -107,7 +107,7 @@ class WebViewActivity : AppCompatActivity() {
 
         cameraLayout.visibility = View.GONE
         cueSDK = CueSDK(this, webView)
-        webView.addJavascriptInterface(cueSDK, cueSDKName)
+        webView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
 
         val url = intent.getStringExtra("url")
         if (url != null) {

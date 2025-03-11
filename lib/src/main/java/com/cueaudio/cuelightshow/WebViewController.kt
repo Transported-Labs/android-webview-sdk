@@ -7,8 +7,7 @@ import android.net.Uri
 import android.webkit.URLUtil
 import android.webkit.WebView
 import androidx.browser.customtabs.CustomTabsIntent
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReadWriteLock
+import com.cueaudio.cuelightshow.WebViewActivity.Companion.CUE_SDK_NAME
 
 class InvalidUrlError(message: String): Exception(message)
 
@@ -39,6 +38,8 @@ class WebViewController(private val context: Context) {
     fun prefetch(url: String, logHandler: LogHandler? = null) {
         if (URLUtil.isValidUrl(url)) {
             val webView = WebView(context)
+            val cueSDK = CueSDK(context, webView)
+            webView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
             val webViewLink = WebViewLink(context, webView)
             val urlPreload = "${url}&preload=true"
             webViewLink.prefetch(urlPreload, logHandler)

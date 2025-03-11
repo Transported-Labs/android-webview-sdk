@@ -18,6 +18,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 /** I/O utilities.  */
 object IoUtils {
+    private const val INDEX_HTML = "index.html"
     private const val CACHE_DIR = "cache"
     private const val DATA_BUFFER = 1024
     private const val REGEX_ALLOWED_LETTERS = "[^0-9a-zA-Z.\\-]"
@@ -105,7 +106,11 @@ object IoUtils {
         return loadMediaFromFile(fullFileName)
     }
 
-    private fun shorten(fileName: String) = fileName.substringAfterLast("_")
+    private fun shorten(fileName: String): String {
+        val shortName = fileName.substringAfterLast("_")
+        val oneLevelUp = fileName.substringBeforeLast("_").substringAfterLast("_")
+        return "$oneLevelUp/$shortName"
+    }
 
     @Synchronized
     private fun getLock(file: File): ReadWriteLock? {
@@ -129,7 +134,11 @@ object IoUtils {
     }
 
     private fun makeFileNameFromUrl(context: Context, url: String): String {
-        val filename: String = url.replace(
+        var preparedUrl = url.substringBefore("?")
+        if (preparedUrl.last() == '/') {
+            preparedUrl += INDEX_HTML
+        }
+        val filename: String = preparedUrl.replace(
             REGEX_ALLOWED_LETTERS.toRegex(),
             "_"
         ).lowercase(
