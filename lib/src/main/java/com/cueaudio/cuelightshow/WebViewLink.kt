@@ -2,6 +2,8 @@ package com.cueaudio.cuelightshow
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -25,6 +27,7 @@ typealias LogHandler = (String) -> Unit
 class WebViewLink (private val context: Context, private val webView: WebView) {
     private lateinit var mainOrigin: String
     private var cachePattern = ".com/files/"
+    private var ignorePattern = "https://services"
     private var indexFileName = "index.json"
     private var gameAssetsPath = "games/light-show"
     private var contentLoadType = ContentLoadType.NONE
@@ -38,8 +41,11 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
         contentLoadType = ContentLoadType.NAVIGATE
         adjustOriginParams(url)
         this.logHandler = logHandler
-        addToLog("*** Started new NAVIGATE process ***")
-        webView.loadUrl(url)
+        val isOffline = !isOnline()
+        val offlineParam = if (isOffline) { "&offline=true" } else { "" }
+        val urlNavigate = "$url$offlineParam"
+        addToLog("*** Started new NAVIGATE process, offline mode = $isOffline ***")
+        webView.loadUrl(urlNavigate)
     }
 
     fun prefetch(url: String, logHandler: LogHandler? = null) {
@@ -55,6 +61,28 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
         webView.loadUrl(url)
 //        makeCacheByList()
 
+    }
+
+    fun isOnline(): Boolean {
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (connectivityManager != null) {
+            val capabilities =
+                connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            if (capabilities != null) {
+                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                    println("Internet ON, NetworkCapabilities.TRANSPORT_CELLULAR")
+                    return true
+                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    println("Internet ON, NetworkCapabilities.TRANSPORT_WIFI")
+                    return true
+                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                    println("Internet ON, NetworkCapabilities.TRANSPORT_ETHERNET")
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private fun adjustOriginParams(url: String) {
@@ -84,13 +112,15 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
                         saveToCacheFromWebView(urlString)
                     }
                     ContentLoadType.NAVIGATE ->  {
-                        val webResourceResponse = loadFromCache(urlString)
-                        if (webResourceResponse != null) {
-                            return webResourceResponse
-                        } else {
-                            val logMessage = "Loaded NOT from cache, from url: $urlString"
-                            addToLog(logMessage)
-                            saveToCacheFromWebView(urlString)
+                        if (!urlString.contains(ignorePattern)) {
+                            val webResourceResponse = loadFromCache(urlString)
+                            if (webResourceResponse != null) {
+                                return webResourceResponse
+                            } else {
+                                val logMessage = "Loaded NOT from cache, from url: $urlString"
+                                addToLog(logMessage)
+                                saveToCacheFromWebView(urlString)
+                            }
                         }
                     }
                 }
@@ -117,7 +147,7 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
     }
 
     private fun saveToCacheFromWebView(url: String) {
-        if (url.contains(cachePattern)) {
+        if (url.contains(cachePattern) && !url.contains(ignorePattern)) {
             saveToCache(url)
         }
     }
