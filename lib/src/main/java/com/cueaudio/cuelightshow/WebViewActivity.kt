@@ -87,6 +87,7 @@ class WebViewActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
 
     private lateinit var cueSDK: CueSDK
+    private lateinit var webViewLink: WebViewLink
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private lateinit var currentPhotoUri: Uri
 
@@ -108,11 +109,11 @@ class WebViewActivity : AppCompatActivity() {
         cameraLayout.visibility = View.GONE
         cueSDK = CueSDK(this, webView)
         webView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
+        webViewLink = WebViewLink(this, webView, cueSDK,"Lightshow WebView")
 
         val url = intent.getStringExtra("url")
         if (url != null) {
-            val webViewLink = WebViewLink(this, webView)
-            webViewLink.navigateTo(url, addToLog)
+            webViewLink.navigateTo(url)
         }
         val isExitButtonHidden = intent.getBooleanExtra("isExitButtonHidden", false)
         exitButton.visibility = if (isExitButtonHidden) View.GONE else View.VISIBLE

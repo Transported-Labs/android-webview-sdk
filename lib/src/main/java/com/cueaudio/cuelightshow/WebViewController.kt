@@ -18,16 +18,21 @@ object LogHandlerHolder {
 
 class WebViewController(private val context: Context) {
     var isExitButtonHidden = false
+    private val prefetchWebView: WebView = WebView(context)
+    private val cueSDK: CueSDK = CueSDK(context, prefetchWebView)
+    private val prefetchWebViewLink: WebViewLink = WebViewLink(context, prefetchWebView, cueSDK, "Prefetch WebView")
+
+    init {
+        prefetchWebView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
+    }
 
     ///Checks validity of passed URL, starts new activity, navigates to the url in embedded WebView-object
     @Throws(InvalidUrlError::class)
-    fun navigateTo(url: String, logHandler: LogHandler? = null) {
+    fun navigateTo(url: String) {
         if (URLUtil.isValidUrl(url)) {
             val intent = Intent(context, WebViewActivity::class.java)
             intent.putExtra("url", url)
             intent.putExtra("isExitButtonHidden", isExitButtonHidden)
-            // Set up global log handler to pass it to activity
-            LogHandlerHolder.logHandler = logHandler
             context.startActivity(intent)
         } else {
             throw InvalidUrlError("Invalid URL: '$url'")
@@ -35,14 +40,10 @@ class WebViewController(private val context: Context) {
     }
 
     @Throws(InvalidUrlError::class)
-    fun prefetch(url: String, logHandler: LogHandler? = null) {
+    fun prefetch(url: String) {
         if (URLUtil.isValidUrl(url)) {
-            val webView = WebView(context)
-            val cueSDK = CueSDK(context, webView)
-            webView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
-            val webViewLink = WebViewLink(context, webView)
             val urlPreload = "${url}&preload=true"
-            webViewLink.prefetch(urlPreload, logHandler)
+            prefetchWebViewLink.prefetch(urlPreload)
         } else {
             throw InvalidUrlError("Invalid URL: '$url'")
         }

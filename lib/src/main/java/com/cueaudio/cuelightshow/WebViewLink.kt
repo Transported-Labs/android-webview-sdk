@@ -3,7 +3,11 @@ package com.cueaudio.cuelightshow
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -24,34 +28,71 @@ enum class ContentLoadType {
 
 typealias LogHandler = (String) -> Unit
 
-class WebViewLink (private val context: Context, private val webView: WebView) {
+class WebViewLink (private val context: Context, private val webView: WebView, private val cueSDK: CueSDK, private val tag: String = "") {
     private lateinit var mainOrigin: String
     private var cachePattern = ".com/files/"
     private var ignorePattern = "https://services"
     private var indexFileName = "index.json"
     private var gameAssetsPath = "games/light-show"
     private var contentLoadType = ContentLoadType.NONE
-    private var logHandler: LogHandler? = null
 
-    init {
-        attachEventHandlers(webView)
+    private var networkStatus: String = ""
+        set(value) {
+            if (field != value ) {
+                field = value
+                cueSDK.notifyInternetConnection(field)
+                addToLog("Network connection is ${field.uppercase()} ($tag)")
+            }
+        }
+
+    private val networkRequest = NetworkRequest.Builder()
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        .build()
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        // network is available for use
+        override fun onAvailable(network: Network) {
+            super.onAvailable(network)
+            updateNetworkStatus()
+        }
+
+        // lost network connection
+        override fun onLost(network: Network) {
+            super.onLost(network)
+            updateNetworkStatus()
+        }
     }
 
-    fun navigateTo(url: String, logHandler: LogHandler? = null) {
+
+    private val connectivityManager: ConnectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    init {
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+        attachEventHandlers(webView)
+        networkStatus = receiveNetworkStatus()
+    }
+
+    private fun receiveNetworkStatus() = if (isOnline()) "on" else "off"
+
+    private fun updateNetworkStatus() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            networkStatus = receiveNetworkStatus()
+        }, 50)
+    }
+
+    fun navigateTo(url: String) {
         contentLoadType = ContentLoadType.NAVIGATE
         adjustOriginParams(url)
-        this.logHandler = logHandler
-        val isOffline = !isOnline()
-        val offlineParam = if (isOffline) { "&offline=true" } else { "" }
+        val isOnline = isOnline()
+        val offlineParam = if (!isOnline) { "&offline=true" } else { "" }
         val urlNavigate = "$url$offlineParam"
-        addToLog("*** Started new NAVIGATE process, offline mode = $isOffline ***")
+        addToLog("*** Started new NAVIGATE process, offline mode = ${!isOnline }***")
         webView.loadUrl(urlNavigate)
     }
 
-    fun prefetch(url: String, logHandler: LogHandler? = null) {
+    fun prefetch(url: String) {
         contentLoadType = ContentLoadType.PREFETCH
         adjustOriginParams(url)
-        this.logHandler = logHandler
         addToLog("*** Started new PREFETCH process ***")
         val urlObj = URL(url)
         val platformIndexUrl = "${urlObj.protocol}://${urlObj.host}/$indexFileName"
@@ -63,23 +104,14 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
 
     }
 
-    fun isOnline(): Boolean {
-        val connectivityManager =
-            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        if (connectivityManager != null) {
-            val capabilities =
-                connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-            if (capabilities != null) {
-                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                    println("Internet ON, NetworkCapabilities.TRANSPORT_CELLULAR")
-                    return true
-                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    println("Internet ON, NetworkCapabilities.TRANSPORT_WIFI")
-                    return true
-                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
-                    println("Internet ON, NetworkCapabilities.TRANSPORT_ETHERNET")
-                    return true
-                }
+    private fun isOnline(): Boolean {
+        val capabilities =
+            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+
+        if (capabilities != null) {
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                println("Internet ON, NetworkCapabilities.NET_CAPABILITY_VALIDATEDT")
+                return true
             }
         }
         return false
@@ -160,7 +192,7 @@ class WebViewLink (private val context: Context, private val webView: WebView) {
     }
 
     private fun addToLog(logMessage: String) {
-        logHandler?.let { it(logMessage) }
+        LogHandlerHolder.logHandler?.let { it(logMessage) }
         println("Files log: $logMessage")
     }
 

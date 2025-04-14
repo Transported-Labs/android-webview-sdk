@@ -33,6 +33,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val permissionsServiceName = "permissions"
     private val storageServiceName = "storage"
     private val cameraServiceName = "camera"
+    private val networkServiceName = "network"
     private val onMethodName = "on"
     private val offMethodName = "off"
     private val openCameraMethodName = "openCamera"
@@ -51,10 +52,12 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private val hasMicMethodName = "hasMicPermission"
     private val hasCamMethodName = "hasCameraPermission"
     private val hasSavePhotoMethodName = "hasSavePhotoPermission"
+    private val getStateMethodName = "getState"
     private val testErrorMethodName = "testError"
 
     private var curRequestId: Int? = null
     private var isFlashlightOn = false
+    private var networkStatus = ""
 
     private val cameraManager: CameraManager = mContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val torchCallback: TorchCallback = object : TorchCallback() {
@@ -77,6 +80,15 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             val params = convertToParamsArray(message)
             processParams(params)
         }
+    }
+
+    fun notifyInternetConnection(param: String) {
+        networkStatus = param
+        notifyJavaScript("network-state", networkStatus)
+    }
+
+    private fun checkNetworkState() {
+        sendToJavaScript(networkStatus)
     }
 
     private fun turnTorchToLevel(level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
@@ -489,8 +501,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 openCamera(CameraLayoutType.VIDEO_ONLY)
                             }
                         }
+                    }  else if (serviceName == networkServiceName) {
+                        when (methodName) {
+                            getStateMethodName ->  {
+                                checkNetworkState()
+                            }
+                        }
                     }  else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName' are supported")
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName', '$networkServiceName' are supported")
                     }
                 }
             } else {
@@ -528,6 +546,28 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             }
         } else {
             println("curRequestId is null")
+        }
+    }
+    private fun notifyJavaScript(channel:String?, result: Any?, errorMessage: String = "") {
+        if (channel != null) {
+            val params = JSONArray()
+            params.put(channel)
+            if (result != null) {
+                params.put(result)
+            } else if (errorMessage != "") {
+                params.put(null)
+                params.put(errorMessage)
+            }
+            val paramData = params.toString()
+            webView.post {
+                val js2 = "cueSDKNotification(JSON.stringify($paramData))"
+                println("Sent Notification to Javascript: $js2")
+                webView.evaluateJavascript(js2) { returnValue ->
+                    println(returnValue)
+                }
+            }
+        } else {
+            println("channel is null")
         }
     }
 }
