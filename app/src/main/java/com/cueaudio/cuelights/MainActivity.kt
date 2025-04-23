@@ -41,9 +41,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadTargetUrl(url: String): String {
-        val connection = URL(url).openConnection()
-        val reader = BufferedReader(InputStreamReader(connection.getInputStream()))
-        return reader.readText()
+        return try {
+            val connection = URL(url).openConnection()
+            val reader = BufferedReader(InputStreamReader(connection.getInputStream()))
+            reader.use { it.readText() } // Safely read and close the reader
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(applicationContext, e.localizedMessage, Toast.LENGTH_SHORT).show()
+            }
+            ""
+        }
     }
+
 }
 

@@ -36,9 +36,13 @@ object IoUtils {
 
     fun downloadToFile(context: Context, url: String): String {
         val fileName = makeFileNameFromUrl(context, url)
-        BufferedInputStream(URL(url).openStream().use { inputStream ->
-            return saveMediaToFile(fileName, inputStream)
-        })
+        try {
+            BufferedInputStream(URL(url).openStream().use { inputStream ->
+                return saveMediaToFile(fileName, inputStream)
+            })
+        } catch (e: Exception) {
+            return "ERROR: ${e.localizedMessage}"
+        }
     }
 
     fun saveMediaToCacheFile(context: Context, filename: String, data: String): String {

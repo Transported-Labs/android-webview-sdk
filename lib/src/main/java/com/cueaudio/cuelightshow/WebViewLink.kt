@@ -8,10 +8,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
-import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,20 +26,22 @@ enum class ContentLoadType {
 
 typealias LogHandler = (String) -> Unit
 
-class WebViewLink (private val context: Context, private val webView: WebView, private val cueSDK: CueSDK, private val tag: String = "") {
+class WebViewLink(private val context: Context,private val webView: WebView, webViewClient: CueWebViewClient? = null){
     private lateinit var mainOrigin: String
     private var cachePattern = ".com/files/"
-    private var ignorePattern = "https://services"
-    private var indexFileName = "index.json"
-    private var gameAssetsPath = "games/light-show"
+    private val ignorePattern = "https://services"
+    private val indexFileName = "index.json"
+    private val gameAssetsPath = "games/light-show"
     private var contentLoadType = ContentLoadType.NONE
-
+    // Property to hold the custom handler
+    var onNetworkStatusChange: ((String) -> Unit)? = null
+    private val cueWebViewClient = webViewClient ?: CueWebViewClient()
+    
     private var networkStatus: String = ""
         set(value) {
             if (field != value ) {
                 field = value
-                cueSDK.notifyInternetConnection(field)
-                addToLog("Network connection is ${field.uppercase()} ($tag)")
+                onNetworkStatusChange?.invoke(field)
             }
         }
 
@@ -66,10 +66,35 @@ class WebViewLink (private val context: Context, private val webView: WebView, p
 
     private val connectivityManager: ConnectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+    // Additional constructor for Java compatibility
+    constructor(context: Context, webView: WebView) : this(context, webView, null)
+
     init {
         connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
-        attachEventHandlers(webView)
+        adjustWebViewSettings(webView)
         networkStatus = receiveNetworkStatus()
+        cueWebViewClient.onInterceptUrlLoad = { urlString ->
+            when (contentLoadType) {
+                ContentLoadType.NONE -> null // No operation
+                ContentLoadType.PREFETCH -> {
+                    saveToCacheFromWebView(urlString)
+                    null
+                }
+                ContentLoadType.NAVIGATE -> {
+                    if (urlString.contains(ignorePattern)) {
+                        null // Ignore URLs matching the pattern
+                    } else {
+                        loadFromCache(urlString) ?: run {
+                            // Log and save to cache if not loaded from cache
+                            addToLog("Loaded NOT from cache, from url: $urlString")
+                            saveToCacheFromWebView(urlString)
+                            null
+                        }
+                    }
+                }
+            }
+        }
+        webView.webViewClient = cueWebViewClient
     }
 
     private fun receiveNetworkStatus() = if (isOnline()) "on" else "off"
@@ -90,18 +115,24 @@ class WebViewLink (private val context: Context, private val webView: WebView, p
         webView.loadUrl(urlNavigate)
     }
 
-    fun prefetch(url: String) {
-        contentLoadType = ContentLoadType.PREFETCH
-        adjustOriginParams(url)
-        addToLog("*** Started new PREFETCH process ***")
+    fun prefetchJSONData(url: String) {
         val urlObj = URL(url)
         val platformIndexUrl = "${urlObj.protocol}://${urlObj.host}/$indexFileName"
         val gameIndexUrl = "${urlObj.protocol}://${urlObj.host}/$gameAssetsPath/$indexFileName"
         makeCacheForIndex(platformIndexUrl)
         makeCacheForIndex(gameIndexUrl)
-        webView.loadUrl(url)
-//        makeCacheByList()
+    }
 
+    fun prefetch(urlPreload: String) {
+        if (networkStatus == "on") {
+            contentLoadType = ContentLoadType.PREFETCH
+            adjustOriginParams(urlPreload)
+            addToLog("*** Started new PREFETCH process ***")
+            prefetchJSONData(urlPreload)
+            webView.loadUrl(urlPreload)
+        } else {
+            addToLog("*** Skipped PREFETCH for OFFLINE mode ***")
+        }
     }
 
     private fun isOnline(): Boolean {
@@ -110,7 +141,7 @@ class WebViewLink (private val context: Context, private val webView: WebView, p
 
         if (capabilities != null) {
             if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
-                println("Internet ON, NetworkCapabilities.NET_CAPABILITY_VALIDATEDT")
+                println("Internet ON, NetworkCapabilities.NET_CAPABILITY_VALIDATED")
                 return true
             }
         }
@@ -124,40 +155,11 @@ class WebViewLink (private val context: Context, private val webView: WebView, p
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun attachEventHandlers(webView: WebView) {
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.mediaPlaybackRequiresUserGesture = false
-        webView.webViewClient = object : WebViewClient() {
-            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
-                super.onReceivedHttpError(view, request, errorResponse)
-                if (errorResponse != null) {
-                    println("Received Http Error: ${errorResponse.reasonPhrase}")
-                }
-            }
-
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                val urlString = request.url.toString()
-                when (contentLoadType) {
-                    ContentLoadType.NONE ->  {}
-                    ContentLoadType.PREFETCH ->  {
-                        saveToCacheFromWebView(urlString)
-                    }
-                    ContentLoadType.NAVIGATE ->  {
-                        if (!urlString.contains(ignorePattern)) {
-                            val webResourceResponse = loadFromCache(urlString)
-                            if (webResourceResponse != null) {
-                                return webResourceResponse
-                            } else {
-                                val logMessage = "Loaded NOT from cache, from url: $urlString"
-                                addToLog(logMessage)
-                                saveToCacheFromWebView(urlString)
-                            }
-                        }
-                    }
-                }
-                return super.shouldInterceptRequest(view, request)
-            }
+    private fun adjustWebViewSettings(webView: WebView) {
+        with(webView.settings) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            mediaPlaybackRequiresUserGesture = false
         }
     }
 
@@ -192,8 +194,7 @@ class WebViewLink (private val context: Context, private val webView: WebView, p
     }
 
     private fun addToLog(logMessage: String) {
-        LogHandlerHolder.logHandler?.let { it(logMessage) }
-        println("Files log: $logMessage")
+        AppLog.addTo(logMessage)
     }
 
     private fun makeCacheByList() {

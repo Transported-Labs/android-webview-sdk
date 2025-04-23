@@ -7,23 +7,27 @@ import android.net.Uri
 import android.webkit.URLUtil
 import android.webkit.WebView
 import androidx.browser.customtabs.CustomTabsIntent
-import com.cueaudio.cuelightshow.WebViewActivity.Companion.CUE_SDK_NAME
 
 class InvalidUrlError(message: String): Exception(message)
 
 ///Helper singleton object to pass the lambda handler to activity
-object LogHandlerHolder {
+object AppLog {
     var logHandler: LogHandler? = null
+    fun addTo(logMessage: String) {
+        logHandler?.let { it(logMessage) }
+        println("Log: $logMessage")
+    }
 }
 
 class WebViewController(private val context: Context) {
     var isExitButtonHidden = false
     private val prefetchWebView: WebView = WebView(context)
-    private val cueSDK: CueSDK = CueSDK(context, prefetchWebView)
-    private val prefetchWebViewLink: WebViewLink = WebViewLink(context, prefetchWebView, cueSDK, "Prefetch WebView")
-
-    init {
-        prefetchWebView.addJavascriptInterface(cueSDK, CUE_SDK_NAME)
+    private val prefetchWebViewLink: WebViewLink = WebViewLink(context, prefetchWebView).apply {
+        val cueSDK = CueSDK(context, prefetchWebView)
+        onNetworkStatusChange = { status ->
+            cueSDK.notifyInternetConnection(status)
+            AppLog.addTo("Network connection is ${status.uppercase()} (Prefetch WebView)")
+        }
     }
 
     ///Checks validity of passed URL, starts new activity, navigates to the url in embedded WebView-object

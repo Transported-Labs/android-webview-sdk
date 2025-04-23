@@ -8,7 +8,12 @@ import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraManager.TorchCallback
-import android.os.*
+import android.os.Build
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.camera.core.CameraControl
@@ -18,7 +23,8 @@ import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
 import java.io.FileNotFoundException
-import java.util.*
+import java.util.Base64
+import java.util.Calendar
 import kotlin.math.roundToInt
 
 object PermissionConstant {
@@ -27,33 +33,35 @@ object PermissionConstant {
     const val ASK_SAVE_PHOTO_REQUEST = 1003
 }
 class CueSDK (private val mContext: Context, private val webView: WebView) {
-
-    private val torchServiceName = "torch"
-    private val vibrationServiceName = "vibration"
-    private val permissionsServiceName = "permissions"
-    private val storageServiceName = "storage"
-    private val cameraServiceName = "camera"
-    private val networkServiceName = "network"
-    private val onMethodName = "on"
-    private val offMethodName = "off"
-    private val openCameraMethodName = "openCamera"
-    private val openPhotoCameraMethod = "openPhotoCamera"
-    private val openVideoCameraMethod = "openVideoCamera"
-    private val checkIsOnMethodName = "isOn"
-    private val vibrateMethodName = "vibrate"
-    private val sparkleMethodName = "sparkle"
-    private val advancedSparkleMethodName = "advancedSparkle"
-    private val saveMediaMethodName = "saveMedia"
-    private val saveCacheFileName = "saveCacheFile"
-    private val getCacheFileName = "getCacheFile"
-    private val askMicMethodName = "getMicPermission"
-    private val askCamMethodName = "getCameraPermission"
-    private val askSavePhotoMethodName = "getSavePhotoPermission"
-    private val hasMicMethodName = "hasMicPermission"
-    private val hasCamMethodName = "hasCameraPermission"
-    private val hasSavePhotoMethodName = "hasSavePhotoPermission"
-    private val getStateMethodName = "getState"
-    private val testErrorMethodName = "testError"
+    companion object {
+        private const val CUE_SDK_NAME = "cueSDK"
+        private const val torchServiceName = "torch"
+        private const val vibrationServiceName = "vibration"
+        private const val permissionsServiceName = "permissions"
+        private const val storageServiceName = "storage"
+        private const val cameraServiceName = "camera"
+        private const val networkServiceName = "network"
+        private const val onMethodName = "on"
+        private const val offMethodName = "off"
+        private const val openCameraMethodName = "openCamera"
+        private const val openPhotoCameraMethod = "openPhotoCamera"
+        private const val openVideoCameraMethod = "openVideoCamera"
+        private const val checkIsOnMethodName = "isOn"
+        private const val vibrateMethodName = "vibrate"
+        private const val sparkleMethodName = "sparkle"
+        private const val advancedSparkleMethodName = "advancedSparkle"
+        private const val saveMediaMethodName = "saveMedia"
+        private const val saveCacheFileName = "saveCacheFile"
+        private const val getCacheFileName = "getCacheFile"
+        private const val askMicMethodName = "getMicPermission"
+        private const val askCamMethodName = "getCameraPermission"
+        private const val askSavePhotoMethodName = "getSavePhotoPermission"
+        private const val hasMicMethodName = "hasMicPermission"
+        private const val hasCamMethodName = "hasCameraPermission"
+        private const val hasSavePhotoMethodName = "hasSavePhotoPermission"
+        private const val getStateMethodName = "getState"
+        private const val testErrorMethodName = "testError"
+    }
 
     private var curRequestId: Int? = null
     private var isFlashlightOn = false
@@ -67,8 +75,10 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         }
     }
     var previewCameraControl: CameraControl? = null
+    var onCameraShow: ((CameraLayoutType) -> Unit)? = null
 
     init {
+        webView.addJavascriptInterface(this, CUE_SDK_NAME)
         cameraManager.registerTorchCallback(torchCallback, null)
     }
 
@@ -159,6 +169,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private fun debugMessageToJS(message: String) {
         // Is used for debug purposes
 //        sendToJavaScript(null, message)
+        println("debugMessageToJS: $message")
     }
 
     private fun nowMs(): Long {
@@ -518,7 +529,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
 
     private fun openCamera(cameraLayoutType : CameraLayoutType) {
-        (mContext as WebViewActivity).startCamera(cameraLayoutType)
+        onCameraShow?.invoke(cameraLayoutType)
     }
 
     private fun errorToJavaScript(errorMessage: String) {
