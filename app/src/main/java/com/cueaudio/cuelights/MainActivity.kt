@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val url =
-                "https://dev-dxp.azurewebsites.net/api/light-show/get-version-url?version=$VERSION"
+                "https://services.developdxp.com/v1/light-show/api/get-version-url?version=$VERSION"
             val targetUrl = loadTargetUrl(url)
             try {
                 webViewController.navigateTo(targetUrl)
