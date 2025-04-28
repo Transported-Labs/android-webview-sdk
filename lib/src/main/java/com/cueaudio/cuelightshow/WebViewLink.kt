@@ -28,7 +28,7 @@ typealias LogHandler = (String) -> Unit
 
 class WebViewLink(private val context: Context,private val webView: WebView, webViewClient: CueWebViewClient? = null){
     private lateinit var mainOrigin: String
-    private var cachePattern = ".com/files/"
+    private var cachePattern = "/files/"
     private val ignorePattern = "https://services"
     private val indexFileName = "index.json"
     private val gameAssetsPath = "games/light-show"
@@ -151,7 +151,6 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
     private fun adjustOriginParams(url: String) {
         val urlObj = URL(url)
         mainOrigin = "${urlObj.protocol}://${urlObj.host}"
-        cachePattern = ".${urlObj.host.substringAfterLast(".")}/files/"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
