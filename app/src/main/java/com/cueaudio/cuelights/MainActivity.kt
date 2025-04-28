@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             val url =
                 "https://services.developdxp.com/v1/light-show/api/get-version-url?version=$VERSION"
-            val targetUrl = loadTargetUrl(url)
+            val targetUrl = loadTargetUrl(url).replace("\"", "")
             try {
                 webViewController.navigateTo(targetUrl)
                 // Finish activity to keep only activity with webview
