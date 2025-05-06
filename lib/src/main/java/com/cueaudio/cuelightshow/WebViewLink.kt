@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
+import java.io.File
 import java.net.URL
 
 enum class ContentLoadType {
@@ -196,6 +197,29 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
         AppLog.addTo(logMessage)
     }
 
+    private fun hasNewLink(path: String, linkArray: JSONArray): Boolean {
+        for (i in 0 until linkArray.length()) {
+            val relativeUrl = linkArray[i] as String
+            val url = "$path/$relativeUrl"
+            val fileName = IoUtils.makeFileNameFromUrl(context, url)
+            val outFile = File(fileName)
+            if (!outFile.exists()) {
+                addToLog("File is not found in cache, need to update cache. File: $relativeUrl")
+                return true
+            }
+        }
+        addToLog("All files listed in JSON for url: $path are already in cache.")
+        return false
+    }
+
+    private fun downloadFiles(path: String, linkArray: JSONArray) {
+        for (i in 0 until linkArray.length()) {
+            val relativeUrl = linkArray[i] as String
+            val absoluteUrl = "$path/$relativeUrl"
+            saveToCache(absoluteUrl, true)
+        }
+    }
+
     private fun makeCacheForIndex(indexUrl: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -204,10 +228,8 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
                     val linkArray = convertToArray(jsonList)
                     if (linkArray != null) {
                         val pathToIndex = indexUrl.substringBeforeLast("/")
-                        for (i in 0 until linkArray.length()) {
-                            val relativeUrl = linkArray[i] as String
-                            val absoluteUrl = "$pathToIndex/$relativeUrl"
-                            saveToCache(absoluteUrl, true)
+                        if (hasNewLink(pathToIndex, linkArray)) {
+                            downloadFiles(pathToIndex, linkArray)
                         }
                     }
                 }

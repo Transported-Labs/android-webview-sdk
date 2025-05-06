@@ -143,7 +143,7 @@ object IoUtils {
         }
     }
 
-    private fun makeFileNameFromUrl(context: Context, url: String): String {
+    fun makeFileNameFromUrl(context: Context, url: String): String {
         var preparedUrl = url.substringBefore("?")
         if (preparedUrl.last() == '/') {
             preparedUrl += INDEX_HTML
