@@ -274,7 +274,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     private fun saveCacheFile(filename: String?, data: String?) {
         if (data != null) {
             if (filename != null) {
-                val logMessage = IoUtils.saveMediaToCacheFile(mContext, filename, data)
+                val logMessage = IoUtils.saveMediaToCacheFile(mContext, filename, data, true)
                 println(logMessage)
                 if (logMessage.contains("Error")) {
                     errorToJavaScript("$logMessage, file: $filename")

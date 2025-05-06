@@ -34,31 +34,37 @@ object IoUtils {
         }
     }
 
-    fun downloadToFile(context: Context, url: String): String {
+    fun downloadToFile(context: Context, url: String, isOverwrite: Boolean): String {
         val fileName = makeFileNameFromUrl(context, url)
         try {
             BufferedInputStream(URL(url).openStream().use { inputStream ->
-                return saveMediaToFile(fileName, inputStream)
+                return saveMediaToFile(fileName, inputStream, isOverwrite)
             })
         } catch (e: Exception) {
             return "ERROR: ${e.localizedMessage}"
         }
     }
 
-    fun saveMediaToCacheFile(context: Context, filename: String, data: String): String {
+    fun saveMediaToCacheFile(context: Context, filename: String, data: String, isOverwrite: Boolean): String {
         val fullFileName = makeCacheFileName(context, filename)
-        return saveMediaToFile(fullFileName, data.byteInputStream())
+        return saveMediaToFile(fullFileName, data.byteInputStream(), isOverwrite)
     }
 
-    private fun saveMediaToFile(fileName: String, inputStream: InputStream): String {
+    private fun saveMediaToFile(fileName: String, inputStream: InputStream, isOverwrite: Boolean): String {
         var resultMessage: String
         val outFile = File(fileName)
         if (outFile.exists()) {
-            resultMessage = "Overwritten in cache"
-            try {
-                outFile.delete()
-            } catch (e: Exception) {
-                resultMessage = "Error, not overwritten in cache, failed to delete file: ${e.localizedMessage}"
+            if (isOverwrite) {
+                resultMessage = "Overwritten in cache"
+                try {
+                    outFile.delete()
+                } catch (e: Exception) {
+                    resultMessage =
+                        "Error, not overwritten in cache, failed to delete file: ${e.localizedMessage}"
+                }
+            } else {
+                resultMessage = "Already exists in cache"
+                return resultMessage
             }
         } else {
             resultMessage = "Added to cache"

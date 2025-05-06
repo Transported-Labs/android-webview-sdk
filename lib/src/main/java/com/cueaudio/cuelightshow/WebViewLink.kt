@@ -181,13 +181,13 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
 
     private fun saveToCacheFromWebView(url: String) {
         if (url.contains(cachePattern) && !url.contains(ignorePattern)) {
-            saveToCache(url)
+            saveToCache(url, false)
         }
     }
 
-    private fun saveToCache(url: String) {
+    private fun saveToCache(url: String, isOverwrite: Boolean) {
         CoroutineScope(Dispatchers.IO).launch {
-            val logMessage = IoUtils.downloadToFile(context, url)
+            val logMessage = IoUtils.downloadToFile(context, url, isOverwrite)
             addToLog(logMessage)
         }
     }
@@ -196,18 +196,6 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
         AppLog.addTo(logMessage)
     }
 
-    private fun makeCacheByList() {
-        val jsonList = loadJsonDataFromAsset("local.json")
-        if (jsonList != null) {
-            val linkArray = convertToArray(jsonList)
-            if (linkArray != null) {
-                for (i in 0 until linkArray.length()) {
-                    val url = linkArray[i] as String
-                    saveToCache(url)
-                }
-            }
-        }
-    }
     private fun makeCacheForIndex(indexUrl: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -219,7 +207,7 @@ class WebViewLink(private val context: Context,private val webView: WebView, web
                         for (i in 0 until linkArray.length()) {
                             val relativeUrl = linkArray[i] as String
                             val absoluteUrl = "$pathToIndex/$relativeUrl"
-                            saveToCache(absoluteUrl)
+                            saveToCache(absoluteUrl, true)
                         }
                     }
                 }
