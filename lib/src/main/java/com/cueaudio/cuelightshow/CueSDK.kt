@@ -41,6 +41,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         private const val storageServiceName = "storage"
         private const val cameraServiceName = "camera"
         private const val networkServiceName = "network"
+        private const val timelineServiceName = "timeline"
         private const val onMethodName = "on"
         private const val offMethodName = "off"
         private const val openCameraMethodName = "openCamera"
@@ -61,6 +62,8 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         private const val hasSavePhotoMethodName = "hasSavePhotoPermission"
         private const val getStateMethodName = "getState"
         private const val testErrorMethodName = "testError"
+        private const val startMethodName = "start"
+        private const val stopMethodName = "stop"
     }
 
     private var curRequestId: Int? = null
@@ -76,6 +79,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     }
     var previewCameraControl: CameraControl? = null
     var onCameraShow: ((CameraLayoutType) -> Unit)? = null
+    var onSwitchTimelineActive: ((Boolean) -> Unit)? = null
 
     init {
         webView.addJavascriptInterface(this, CUE_SDK_NAME)
@@ -95,6 +99,15 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
     fun notifyInternetConnection(param: String) {
         networkStatus = param
         notifyJavaScript("network-state", networkStatus)
+    }
+
+    fun notifyTimelineBreak() {
+        notifyJavaScript("timeline", "break")
+    }
+
+    private fun switchTimelineActive(newState: Boolean) {
+        onSwitchTimelineActive?.invoke(newState)
+        sendToJavaScript(true)
     }
 
     private fun checkNetworkState() {
@@ -512,14 +525,23 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                                 openCamera(CameraLayoutType.VIDEO_ONLY)
                             }
                         }
-                    }  else if (serviceName == networkServiceName) {
+                    } else if (serviceName == networkServiceName) {
                         when (methodName) {
                             getStateMethodName ->  {
                                 checkNetworkState()
                             }
                         }
-                    }  else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName', '$networkServiceName' are supported")
+                    } else if (serviceName == timelineServiceName) {
+                        when (methodName) {
+                            startMethodName ->  {
+                                switchTimelineActive(true)
+                            }
+                            stopMethodName ->  {
+                                switchTimelineActive(false)
+                            }
+                        }
+                    } else {
+                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName', '$networkServiceName', '$timelineServiceName' are supported")
                     }
                 }
             } else {

@@ -8,6 +8,7 @@ import android.view.View
 import android.webkit.WebView
 import android.widget.ImageButton
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -33,6 +34,7 @@ class WebViewActivity : AppCompatActivity() {
     }
     private lateinit var webViewLayout: View
     private lateinit var exitButton: ImageButton
+    private lateinit var breakTimelineButton: ImageButton
     private lateinit var webView: WebView
     private lateinit var cueWebChromeClient: CueWebChromeClient
     private lateinit var cameraPreview: CameraPreview
@@ -42,6 +44,11 @@ class WebViewActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             cueWebChromeClient.handleActivityResult(result.resultCode, result.data)
         }
+    private var isActiveShow: Boolean = false
+        set(value) {
+            field = value
+            breakTimelineButton.visibility = if (value) View.VISIBLE else View.GONE
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +57,7 @@ class WebViewActivity : AppCompatActivity() {
         setContentView(R.layout.lib_main)
         webViewLayout = findViewById(R.id.webViewLayout)
         exitButton = findViewById(R.id.exitButton)
+        breakTimelineButton = findViewById(R.id.breakTimelineButton)
         webView = findViewById(R.id.webView)
         cueWebChromeClient = CueWebChromeClient(this, activityResultLauncher)
         webView.webChromeClient = cueWebChromeClient
@@ -67,6 +75,12 @@ class WebViewActivity : AppCompatActivity() {
         }
         cueSDK.onCameraShow = { cameraLayoutType ->
             cameraPreview.startCamera(cameraLayoutType)
+        }
+        cueSDK.onSwitchTimelineActive = { isActive ->
+            runOnUiThread {
+                isActiveShow = isActive
+                println("Timeline switched to active: $isActive")
+            }
         }
         cameraPreview.checkAndRequestPermissions(this) {
             Toast.makeText(baseContext, "Please set up Camera permission", Toast.LENGTH_SHORT)
@@ -87,6 +101,19 @@ class WebViewActivity : AppCompatActivity() {
             webView.loadUrl("about:blank")
             finish()
         }
+        breakTimelineButton.setOnClickListener {
+            cueSDK.notifyTimelineBreak()
+        }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!isActiveShow) {
+                    isEnabled = false // Allow default back behavior
+                    onBackPressedDispatcher.onBackPressed()
+                } else {
+                    cueSDK.notifyTimelineBreak()
+                }
+            }
+        })
         setScreenBrightness(MAXIMUM_LEVEL)
     }
 
