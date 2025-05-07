@@ -133,19 +133,15 @@ class WebViewActivity : AppCompatActivity() {
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
+        requestId: Int,
         permissions: Array<String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            PermissionConstant.ASK_CAMERA_REQUEST,
-            PermissionConstant.ASK_MICROPHONE_REQUEST,
-            PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
-                val granted = (grantResults.isNotEmpty()
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                cueSDK.callCurPermissionRequestGranted(granted)
-            }
+        super.onRequestPermissionsResult(requestId, permissions, grantResults)
+        if (requestId > 0) {
+            val granted = (grantResults.isNotEmpty()
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+            cueSDK.callCurPermissionRequestGranted(requestId, granted)
         }
     }
 }

@@ -66,7 +66,6 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         private const val stopMethodName = "stop"
     }
 
-    private var curRequestId: Int? = null
     private var isFlashlightOn = false
     private var networkStatus = ""
 
@@ -105,22 +104,22 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         notifyJavaScript("timeline", "break")
     }
 
-    private fun switchTimelineActive(newState: Boolean) {
+    private fun switchTimelineActive(requestId: Int, newState: Boolean) {
         onSwitchTimelineActive?.invoke(newState)
-        sendToJavaScript(true)
+        sendToJavaScript(requestId,true)
     }
 
-    private fun checkNetworkState() {
-        sendToJavaScript(networkStatus)
+    private fun checkNetworkState(requestId: Int) {
+        sendToJavaScript(requestId, networkStatus)
     }
 
-    private fun turnTorchToLevel(level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
+    private fun turnTorchToLevel(requestId: Int, level: Float, isJavaScriptCallbackNeeded: Boolean = true) {
         //  Currently there is no way to control the strength while the CameraX is opened
         val cameraControl = this.previewCameraControl
         if (cameraControl != null) {
             cameraControl.enableTorch(true)
             if (isJavaScriptCallbackNeeded) {
-                sendToJavaScript(null)
+                sendToJavaScript(requestId, null)
             }
         } else {
             try {
@@ -136,39 +135,39 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             cameraManager.turnOnTorchWithStrengthLevel(cameraId, strengthLevel)
                         }
                         if (isJavaScriptCallbackNeeded) {
-                            sendToJavaScript(null)
+                            sendToJavaScript(requestId, null)
                         }
                     } else {
                         //Simply turn torch on
-                        turnTorch(true, isJavaScriptCallbackNeeded)
+                        turnTorch(requestId, true, isJavaScriptCallbackNeeded)
                     }
                 } else {
                     //Simply turn torch on
-                    turnTorch(true, isJavaScriptCallbackNeeded)
+                    turnTorch(requestId, true, isJavaScriptCallbackNeeded)
                 }
             } catch (e: CameraAccessException) {
-                errorToJavaScript("Method turnTorchToLevel - Camera access denied: " + e.localizedMessage)
+                errorToJavaScript(requestId, "Method turnTorchToLevel - Camera access denied: " + e.localizedMessage)
             }
         }
     }
 
     // Using methods of CameraX/Camera2 API to turn torch on/off when front camera is active
-    private fun turnTorch(isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
+    private fun turnTorch(requestId: Int, isOn: Boolean, isJavaScriptCallbackNeeded: Boolean = true) {
         val cameraControl = this.previewCameraControl
         if (cameraControl != null) {
             cameraControl.enableTorch(isOn)
             if (isJavaScriptCallbackNeeded) {
-                sendToJavaScript(null)
+                sendToJavaScript(requestId, null)
             }
         } else {
             try {
                 val cameraId = cameraManager.cameraIdList[0]
                 cameraManager.setTorchMode(cameraId, isOn)
                 if (isJavaScriptCallbackNeeded) {
-                    sendToJavaScript(null)
+                    sendToJavaScript(requestId, null)
                 }
             } catch (e: CameraAccessException) {
-                errorToJavaScript("Method turnTorch - Camera access denied")
+                errorToJavaScript(requestId, "Method turnTorch - Camera access denied")
             }
         }
     }
@@ -179,16 +178,16 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         return if (level < minLevel) minLevel else (if (level > maxLevel) maxLevel else level)
     }
 
-    private fun debugMessageToJS(message: String) {
+    private fun debugMessageToJS(requestId: Int, message: String) {
         // Is used for debug purposes
-//        sendToJavaScript(null, message)
-        println("debugMessageToJS: $message")
+//        sendToJavaScript(requestId, null, message)
+        println("debugMessageToJS, requestId: $requestId, message: $message")
     }
 
     private fun nowMs(): Long {
         return Calendar.getInstance().timeInMillis
     }
-    private fun advancedSparkle(rampUpMs: Int?, sustainMs: Int?, rampDownMs: Int?, intensity: Double?) {
+    private fun advancedSparkle(requestId: Int, rampUpMs: Int?, sustainMs: Int?, rampDownMs: Int?, intensity: Double?) {
         val blinkDelayMs: Long = 50
         if ((rampUpMs != null) && (sustainMs != null) && (rampDownMs != null) && (intensity != null)) {
             val totalDuration = rampUpMs + sustainMs + rampDownMs
@@ -199,42 +198,42 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                     var currentRampUpTime: Long = 0
                     while (currentRampUpTime < rampUpMs) {
                         val upIntensity: Float = (currentRampUpTime.toFloat() / rampUpMs.toFloat()) * intenseLevel
-                        debugMessageToJS("rampUp: $upIntensity")
-                        turnTorchToLevel(adjustedIntenseLevel(upIntensity), false)
+                        debugMessageToJS(requestId, "rampUp: $upIntensity")
+                        turnTorchToLevel(requestId, adjustedIntenseLevel(upIntensity), false)
                         Thread.sleep(blinkDelayMs)
                         currentRampUpTime = nowMs() - rampUpStart
                     }
                     if (sustainMs > 0) {
-                        debugMessageToJS("sustain: $intenseLevel")
-                        turnTorchToLevel(adjustedIntenseLevel(intenseLevel), false)
+                        debugMessageToJS(requestId, "sustain: $intenseLevel")
+                        turnTorchToLevel(requestId, adjustedIntenseLevel(intenseLevel), false)
                         Thread.sleep(sustainMs.toLong())
                     }
                     val rampDownStart = nowMs()
                     var currentRampDownTime: Long = 0
                     while (currentRampDownTime < rampDownMs){
                         val downIntensity = (1.0 - currentRampDownTime.toFloat() / rampDownMs.toFloat()) * intenseLevel
-                        debugMessageToJS("rampDown: $downIntensity")
-                        turnTorchToLevel(adjustedIntenseLevel(downIntensity.toFloat()), false)
+                        debugMessageToJS(requestId, "rampDown: $downIntensity")
+                        turnTorchToLevel(requestId, adjustedIntenseLevel(downIntensity.toFloat()), false)
                         Thread.sleep(blinkDelayMs)
                         currentRampDownTime = nowMs() - rampDownStart
                     }
                 } catch (e: InterruptedException) {
-                    debugMessageToJS("interrupted by time: $totalDuration ms")
+                    debugMessageToJS(requestId, "interrupted by time: $totalDuration ms")
                 }
-                debugMessageToJS("turned off inside")
-                turnTorch(false, false)
-                sendToJavaScript(null)
+                debugMessageToJS(requestId, "turned off inside")
+                turnTorch(requestId, false, false)
+                sendToJavaScript(requestId, null)
             }
             flashThread.start()
             Handler(Looper.getMainLooper()).postDelayed({
                 flashThread.interrupt()
             }, totalDuration.toLong())
         } else {
-            errorToJavaScript("Cannot be null rampUpMs: $rampUpMs, sustainMs: $sustainMs, rampDownMs: $rampDownMs, intensity: $intensity")
+            errorToJavaScript(requestId, "Cannot be null rampUpMs: $rampUpMs, sustainMs: $sustainMs, rampDownMs: $rampDownMs, intensity: $intensity")
         }
     }
 
-    private fun sparkle(duration: Int?) {
+    private fun sparkle(requestId: Int, duration: Int?) {
         if (duration != null) {
             val flashThread = Thread {
                 var isOn = false
@@ -242,11 +241,11 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 val blinkDelay: Long = 50
                 while (isSparkling) {
                     isOn = !isOn
-                    turnTorch(isOn, false)
+                    turnTorch(requestId, isOn, false)
                     try {
                         Thread.sleep(blinkDelay)
                     } catch (e: InterruptedException) {
-                        turnTorch(false, false)
+                        turnTorch(requestId, false, false)
                         isSparkling = false
                     }
                 }
@@ -255,14 +254,14 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             flashThread.start()
             Handler(Looper.getMainLooper()).postDelayed({
                 flashThread.interrupt()
-                sendToJavaScript(null)
+                sendToJavaScript(requestId, null)
             }, duration.toLong())
         } else {
-            errorToJavaScript("Duration: $duration is not valid value")
+            errorToJavaScript(requestId, "Duration: $duration is not valid value")
         }
     }
 
-    private fun saveMedia(data: String?, filename: String?) {
+    private fun saveMedia(requestId: Int, data: String?, filename: String?) {
         if (data != null) {
             if (filename != null) {
                 try {
@@ -272,53 +271,53 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                             Environment.DIRECTORY_DCIM
                         ), filename
                     )
-                    sendToJavaScript(null)
+                    sendToJavaScript(requestId, null)
                     path.writeBytes(pictureBytes)
                 } catch (e: FileNotFoundException) {
-                    e.localizedMessage?.let { errorToJavaScript(it) }
+                    e.localizedMessage?.let { errorToJavaScript(requestId, it) }
                 }
             } else {
-                errorToJavaScript("Filename is null")
+                errorToJavaScript(requestId, "Filename is null")
             }
         } else {
-            errorToJavaScript("Data are null")
+            errorToJavaScript(requestId, "Data are null")
         }
     }
-    private fun saveCacheFile(filename: String?, data: String?) {
+    private fun saveCacheFile(requestId: Int, filename: String?, data: String?) {
         if (data != null) {
             if (filename != null) {
                 val logMessage = IoUtils.saveMediaToCacheFile(mContext, filename, data, true)
                 println(logMessage)
                 if (logMessage.contains("Error")) {
-                    errorToJavaScript("$logMessage, file: $filename")
+                    errorToJavaScript(requestId, "$logMessage, file: $filename")
                 } else {
-                    sendToJavaScript(null)
+                    sendToJavaScript(requestId, null)
                 }
             } else {
-                errorToJavaScript("Filename is null")
+                errorToJavaScript(requestId, "Filename is null")
             }
         } else {
-            errorToJavaScript("Data are null")
+            errorToJavaScript(requestId, "Data are null")
         }
     }
 
-    private fun sendCacheFileToJavascript(filename: String?) {
+    private fun sendCacheFileToJavascript(requestId: Int, filename: String?) {
         if (filename != null) {
             val (inputStream, logMessage) = IoUtils.loadMediaFromCacheFile(mContext, filename)
             println(logMessage)
             if (inputStream != null) {
                 val inputAsString = inputStream.bufferedReader().use { it.readText() }  // defaults to UTF-8
-                sendToJavaScript(inputAsString)
+                sendToJavaScript(requestId, inputAsString)
             } else {
-                errorToJavaScript("Error with file $filename: $logMessage")
+                errorToJavaScript(requestId, "Error with file $filename: $logMessage")
             }
         } else {
-            errorToJavaScript("Filename is null")
+            errorToJavaScript(requestId, "Filename is null")
         }
     }
 
     @Suppress("DEPRECATION")
-    private fun makeVibration(duration: Int?) {
+    private fun makeVibration(requestId: Int, duration: Int?) {
         if (duration != null) {
             val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager =
@@ -328,12 +327,12 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 mContext.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
             vibrator.vibrate(duration.toLong())
-            sendToJavaScript(null)
+            sendToJavaScript(requestId, null)
         } else {
-            errorToJavaScript("Duration: $duration is not valid value")
+            errorToJavaScript(requestId, "Duration: $duration is not valid value")
         }
     }
-    private fun hasPermission(requestCode: Int) {
+    private fun hasPermission(requestId: Int, requestCode: Int) {
         var permissionType = ""
         when (requestCode) {
             PermissionConstant.ASK_CAMERA_REQUEST -> {
@@ -345,7 +344,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
                     // Not ask for permission for Android 11+
-                    sendToJavaScript(true)
+                    sendToJavaScript(requestId, true)
                     return
                 } else {
                     permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -356,13 +355,13 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             val permission: Int =
                 ContextCompat.checkSelfPermission(mContext, permissionType)
             val result = (permission == PackageManager.PERMISSION_GRANTED)
-            sendToJavaScript(result)
+            sendToJavaScript(requestId, result)
         } else {
-            errorToJavaScript("PermissionID can not be empty")
+            errorToJavaScript(requestId, "PermissionID can not be empty")
         }
     }
 
-    private fun askForPermission(requestCode: Int) {
+    private fun askForPermission(requestId: Int, requestCode: Int) {
         var permissionType = ""
         when (requestCode) {
             PermissionConstant.ASK_CAMERA_REQUEST -> {
@@ -374,7 +373,7 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
             PermissionConstant.ASK_SAVE_PHOTO_REQUEST -> {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
                     // Not ask for permission for Android 11+
-                    sendToJavaScript(true)
+                    sendToJavaScript(requestId, true)
                     return
                 } else {
                     permissionType = Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -386,22 +385,22 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
                 ContextCompat.checkSelfPermission(mContext, permissionType)
             if (permission != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(
-                    mContext as Activity, arrayOf<String>(permissionType), requestCode
+                    mContext as Activity, arrayOf<String>(permissionType), requestId
                 )
             } else {
-                sendToJavaScript(true)
+                sendToJavaScript(requestId, true)
             }
         } else {
-            errorToJavaScript("PermissionID can not be empty")
+            errorToJavaScript(requestId, "PermissionID can not be empty")
         }
     }
 
-    fun callCurPermissionRequestGranted(granted: Boolean) {
-        sendToJavaScript(granted)
+    fun callCurPermissionRequestGranted(requestId: Int, granted: Boolean) {
+        sendToJavaScript(requestId, granted)
     }
 
-    private fun checkIsTorchOn() {
-        sendToJavaScript(isFlashlightOn)
+    private fun checkIsTorchOn(requestId: Int) {
+        sendToJavaScript(requestId, isFlashlightOn)
     }
 
     private fun convertToParamsArray(source: String): JSONArray? {
@@ -426,181 +425,196 @@ class CueSDK (private val mContext: Context, private val webView: WebView) {
         params?.let {
             val requestId = params[0] as? Int
             if (requestId != null) {
-                curRequestId = requestId
                 val serviceName = params[1] as? String
                 val methodName = params[2] as? String
                 if ((serviceName != null) && (methodName != null)) {
-                    if (serviceName == torchServiceName) {
-                        when(methodName){
-                            onMethodName -> {
-                                if (params.length() > 3) {
-                                    val level = params[3] as? Double
-                                    if (level != null) {
-                                        turnTorchToLevel(level.toFloat())
-                                    } else {
-                                        val levelInt = params[3] as? Int
-                                        if (levelInt != null) {
-                                            turnTorchToLevel(levelInt.toFloat())
-                                        } else {
-                                            errorToJavaScript("Level cannot be null")
-                                        }
-                                    }
-                                } else {
-                                    turnTorch(true)
-                                }
-                            }
-                            offMethodName -> turnTorch(false)
-                            checkIsOnMethodName -> checkIsTorchOn()
-                            sparkleMethodName -> {
-                                val duration = params[3] as? Int
-                                sparkle(duration)
-                            }
-                            advancedSparkleMethodName -> {
-                                if (params.length() > 6) {
-                                    val rampUpMs = params[3] as? Int
-                                    val sustainMs = params[4] as? Int
-                                    val rampDownMs = params[5] as? Int
-                                    val intensity = getAsDouble(params[6])
-                                    advancedSparkle(rampUpMs, sustainMs, rampDownMs, intensity)
-                                } else {
-                                    errorToJavaScript("Needed more params for advancedSparkle: rampUpMs: Int, sustainMs: Int, rampDownMs: Int, intensity: Float")
-                                }
-                            }
-                            testErrorMethodName -> errorToJavaScript("This is the test error message")
-                        }
-                    } else if (serviceName == vibrationServiceName) {
-                        when (methodName) {
-                            vibrateMethodName ->  {
-                                val duration = params[3] as? Int
-                                makeVibration(duration)
-                            }
-                        }
-                    }  else if (serviceName == storageServiceName) {
-                        when (methodName) {
-                            saveMediaMethodName ->  {
-                                val data = params[3] as? String
-                                val filename = params[4] as? String
-                                saveMedia(data, filename)
-                            }
-                            saveCacheFileName ->  {
-                                val filename = params[3] as? String
-                                val data = params[4] as? String
-                                saveCacheFile(filename, data)
-                            }
-                            getCacheFileName ->  {
-                                val filename = params[3] as? String
-                                sendCacheFileToJavascript(filename)
-                            }
-                        }
-                    } else if (serviceName == permissionsServiceName) {
-                        when (methodName) {
-                            askMicMethodName ->  {
-                                askForPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
-                            }
-                            askCamMethodName ->  {
-                                askForPermission(PermissionConstant.ASK_CAMERA_REQUEST)
-                            }
-                            askSavePhotoMethodName ->  {
-                                askForPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
-                            }
-                            hasMicMethodName ->  {
-                                hasPermission(PermissionConstant.ASK_MICROPHONE_REQUEST)
-                            }
-                            hasCamMethodName ->  {
-                                hasPermission(PermissionConstant.ASK_CAMERA_REQUEST)
-                            }
-                            hasSavePhotoMethodName ->  {
-                                hasPermission(PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
-                            }
-                        }
-                    } else if (serviceName == cameraServiceName) {
-                        when (methodName) {
-                            openCameraMethodName ->  {
-                                openCamera(CameraLayoutType.BOTH)
-                            }
-                            openPhotoCameraMethod ->  {
-                                openCamera(CameraLayoutType.PHOTO_ONLY)
-                            }
-                            openVideoCameraMethod ->  {
-                                openCamera(CameraLayoutType.VIDEO_ONLY)
-                            }
-                        }
-                    } else if (serviceName == networkServiceName) {
-                        when (methodName) {
-                            getStateMethodName ->  {
-                                checkNetworkState()
-                            }
-                        }
-                    } else if (serviceName == timelineServiceName) {
-                        when (methodName) {
-                            startMethodName ->  {
-                                switchTimelineActive(true)
-                            }
-                            stopMethodName ->  {
-                                switchTimelineActive(false)
-                            }
-                        }
-                    } else {
-                        errorToJavaScript("Only services '$torchServiceName', '$vibrationServiceName', '$permissionsServiceName', '$storageServiceName', '$cameraServiceName', '$networkServiceName', '$timelineServiceName' are supported")
+                    when (serviceName) {
+                        torchServiceName -> handleTorchService(requestId, methodName, params)
+                        vibrationServiceName -> handleVibrationService(requestId, methodName, params)
+                        storageServiceName -> handleStorageService(requestId, methodName, params)
+                        permissionsServiceName -> handlePermissionsService(requestId, methodName)
+                        cameraServiceName -> handleCameraService(requestId, methodName)
+                        networkServiceName -> handleNetworkService(requestId, methodName)
+                        timelineServiceName -> handleTimelineService(requestId, methodName)
+                        else -> errorToJavaScript(requestId, "Unsupported service: '$serviceName'")
                     }
+                } else {
+                    errorToJavaScript(requestId, "No correct serviceName or/and methodName were passed")
                 }
-            } else {
-                errorToJavaScript("No correct serviceName or/and methodName were passed")
+            }  else {
+                println("No correct requestId was passed")
             }
         }
     }
 
-    private fun openCamera(cameraLayoutType : CameraLayoutType) {
+    private fun handleTorchService(requestId: Int, methodName: String, params: JSONArray) {
+        when(methodName){
+            onMethodName -> {
+                if (params.length() > 3) {
+                    val level = params[3] as? Double
+                    if (level != null) {
+                        turnTorchToLevel(requestId, level.toFloat())
+                    } else {
+                        val levelInt = params[3] as? Int
+                        if (levelInt != null) {
+                            turnTorchToLevel(requestId, levelInt.toFloat())
+                        } else {
+                            errorToJavaScript(requestId, "Level cannot be null")
+                        }
+                    }
+                } else {
+                    turnTorch(requestId, true)
+                }
+            }
+            offMethodName -> turnTorch(requestId, false)
+            checkIsOnMethodName -> checkIsTorchOn(requestId)
+            sparkleMethodName -> {
+                val duration = params[3] as? Int
+                sparkle(requestId, duration)
+            }
+            advancedSparkleMethodName -> {
+                if (params.length() > 6) {
+                    val rampUpMs = params[3] as? Int
+                    val sustainMs = params[4] as? Int
+                    val rampDownMs = params[5] as? Int
+                    val intensity = getAsDouble(params[6])
+                    advancedSparkle(requestId, rampUpMs, sustainMs, rampDownMs, intensity)
+                } else {
+                    errorToJavaScript(requestId, "Needed more params for advancedSparkle: rampUpMs: Int, sustainMs: Int, rampDownMs: Int, intensity: Float")
+                }
+            }
+            testErrorMethodName -> errorToJavaScript(requestId, "This is the test error message")
+        }
+    }
+
+    private fun handleVibrationService(requestId: Int, methodName: String, params: JSONArray) {
+        when (methodName) {
+            vibrateMethodName ->  {
+                val duration = params[3] as? Int
+                makeVibration(requestId, duration)
+            }
+        }
+    }
+
+    private fun handleStorageService(requestId: Int, methodName: String, params: JSONArray) {
+        when (methodName) {
+            saveMediaMethodName ->  {
+                val data = params[3] as? String
+                val filename = params[4] as? String
+                saveMedia(requestId, data, filename)
+            }
+            saveCacheFileName ->  {
+                val filename = params[3] as? String
+                val data = params[4] as? String
+                saveCacheFile(requestId, filename, data)
+            }
+            getCacheFileName ->  {
+                val filename = params[3] as? String
+                sendCacheFileToJavascript(requestId, filename)
+            }
+        }
+    }
+
+    private fun handlePermissionsService(requestId: Int, methodName: String) {
+        when (methodName) {
+            askMicMethodName ->  {
+                askForPermission(requestId, PermissionConstant.ASK_MICROPHONE_REQUEST)
+            }
+            askCamMethodName ->  {
+                askForPermission(requestId, PermissionConstant.ASK_CAMERA_REQUEST)
+            }
+            askSavePhotoMethodName ->  {
+                askForPermission(requestId, PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
+            }
+            hasMicMethodName ->  {
+                hasPermission(requestId, PermissionConstant.ASK_MICROPHONE_REQUEST)
+            }
+            hasCamMethodName ->  {
+                hasPermission(requestId, PermissionConstant.ASK_CAMERA_REQUEST)
+            }
+            hasSavePhotoMethodName ->  {
+                hasPermission(requestId, PermissionConstant.ASK_SAVE_PHOTO_REQUEST)
+            }
+        }
+    }
+
+    private fun handleCameraService(requestId: Int, methodName: String) {
+        when (methodName) {
+            openCameraMethodName ->  {
+                openCamera(requestId, CameraLayoutType.BOTH)
+            }
+            openPhotoCameraMethod ->  {
+                openCamera(requestId, CameraLayoutType.PHOTO_ONLY)
+            }
+            openVideoCameraMethod ->  {
+                openCamera(requestId, CameraLayoutType.VIDEO_ONLY)
+            }
+        }
+    }
+
+    private fun handleNetworkService(requestId: Int, methodName: String) {
+        when (methodName) {
+            getStateMethodName ->  {
+                checkNetworkState(requestId)
+            }
+        }
+    }
+
+    private fun handleTimelineService(requestId: Int, methodName: String) {
+        when (methodName) {
+            startMethodName ->  {
+                switchTimelineActive(requestId, true)
+            }
+            stopMethodName ->  {
+                switchTimelineActive(requestId, false)
+            }
+        }
+    }
+
+    private fun openCamera(requestId: Int, cameraLayoutType : CameraLayoutType) {
         onCameraShow?.invoke(cameraLayoutType)
+        sendToJavaScript(requestId, null)
     }
 
-    private fun errorToJavaScript(errorMessage: String) {
+    private fun errorToJavaScript(requestId: Int, errorMessage: String) {
         println(errorMessage)
-        sendToJavaScript(null, errorMessage)
+        sendToJavaScript(requestId, null, errorMessage)
     }
 
-    private fun sendToJavaScript(result: Any?, errorMessage: String = "") {
-        if (curRequestId != null) {
-            val params = JSONArray()
-            params.put(curRequestId)
-            if (result != null) {
-                params.put(result)
-            } else if (errorMessage != "") {
-                params.put(null)
-                params.put(errorMessage)
+    private fun sendToJavaScript(requestId: Int, result: Any?, errorMessage: String = "") {
+        val params = JSONArray()
+        params.put(requestId)
+        if (result != null) {
+            params.put(result)
+        } else if (errorMessage != "") {
+            params.put(null)
+            params.put(errorMessage)
+        }
+        val paramData = params.toString()
+        webView.post {
+            val js2 = "cueSDKCallback(JSON.stringify($paramData))"
+            println("Sent to Javascript: $js2")
+            webView.evaluateJavascript(js2) { returnValue ->
+                println(returnValue)
             }
-            val paramData = params.toString()
-            webView.post {
-                val js2 = "cueSDKCallback(JSON.stringify($paramData))"
-                println("Sent to Javascript: $js2")
-                webView.evaluateJavascript(js2) { returnValue ->
-                    println(returnValue)
-                }
-            }
-        } else {
-            println("curRequestId is null")
         }
     }
-    private fun notifyJavaScript(channel:String?, result: Any?, errorMessage: String = "") {
-        if (channel != null) {
-            val params = JSONArray()
-            params.put(channel)
-            if (result != null) {
-                params.put(result)
-            } else if (errorMessage != "") {
-                params.put(null)
-                params.put(errorMessage)
+    private fun notifyJavaScript(channel:String, result: Any?, errorMessage: String = "") {
+        val params = JSONArray()
+        params.put(channel)
+        if (result != null) {
+            params.put(result)
+        } else if (errorMessage != "") {
+            params.put(null)
+            params.put(errorMessage)
+        }
+        val paramData = params.toString()
+        webView.post {
+            val js2 = "cueSDKNotification(JSON.stringify($paramData))"
+            println("Sent Notification to Javascript: $js2")
+            webView.evaluateJavascript(js2) { returnValue ->
+                println(returnValue)
             }
-            val paramData = params.toString()
-            webView.post {
-                val js2 = "cueSDKNotification(JSON.stringify($paramData))"
-                println("Sent Notification to Javascript: $js2")
-                webView.evaluateJavascript(js2) { returnValue ->
-                    println(returnValue)
-                }
-            }
-        } else {
-            println("channel is null")
         }
     }
 }
