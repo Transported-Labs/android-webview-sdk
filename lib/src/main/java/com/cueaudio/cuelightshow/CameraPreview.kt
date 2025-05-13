@@ -67,6 +67,7 @@ class CameraPreview @JvmOverloads constructor(
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
     private lateinit var cameraExecutor: ExecutorService
+    private lateinit var cameraProvider: ProcessCameraProvider
 
     // Property to hold reference to the activity
     private var activity: Activity? = null
@@ -124,7 +125,7 @@ class CameraPreview @JvmOverloads constructor(
 
         cameraProviderFuture.addListener({
             // Used to bind the lifecycle of cameras to the lifecycle owner
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+            cameraProvider = cameraProviderFuture.get()
 
             // Preview
             val preview = Preview.Builder()
@@ -318,6 +319,17 @@ class CameraPreview @JvmOverloads constructor(
             imageButton.visibility = if (isRecording) View.GONE else View.VISIBLE
         }
         closeButton.visibility = if (isRecording) View.GONE else View.VISIBLE
+    }
+
+
+    // Function to release the camera when done
+    fun releaseCamera() {
+        try {
+            cameraProvider.unbindAll()
+            Log.d(TAG, "Camera released successfully")
+        } catch (exc: Exception) {
+            Log.e(TAG, "Failed to release camera", exc)
+        }
     }
 
 }
